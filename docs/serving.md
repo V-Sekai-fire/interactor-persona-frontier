@@ -56,6 +56,10 @@ before the Python path is removed). Until then both exist and the Python image i
 | the player's GPU | stages 4, 5, 7, 8, 10 as guests, rotated per stage | Kimodo 4-bit (4.3 GB) is the ceiling; everything else under 2 GB |
 | a rented GPU cell (RunPod serverless, allowed since 2026-11-04) | overflow of the authoring GPU only: stage 1 generation and the full-bench judge runs | per-second; never a player's path |
 
+## The release is the work
+
+Serving Bonsai 2 is done (`ninfer-all windows-service-v1.0.0`); the R&D is one release carrying every part, `docs/release.md`. The measurements below feed its gates.
+
 ## Next three measurements, in order
 
 1. SkinTokens guest vs `interactor-skintokens-auto-rig` parity on held-out meshes, planted fault,

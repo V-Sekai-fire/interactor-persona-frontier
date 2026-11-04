@@ -43,6 +43,7 @@ defmodule Frontier.Tokens do
     token :store, :token_2, "SQLite (vendored amalgamation) through datasources/sqlite/sql.c; datasource-store's fdb_vfs.c linked in with -Kfdb, pages in FoundationDB. Smoke-tested 2026-11-04: a practice trace read back from weft/db/frontier/DELTA/, no local file."
     token :planner, :paid, "interactor-taskweft-persona (RECTGTN over JSON-LD) as a Lean library: the toolchain and planner Token 1's guests pay for, here as a host library"
     token :erlang_node_in_lean, :not_spent, "transports/Frontier/Dist.lean: EPMD ALIVE2, v6 handshake, pass-through ETF, REG_SEND in, SEND out. The ledger has no third token; retire or claim before a rung pins it. Boring substitute: a BEAM-side port or erl_interface C node."
+    token :the_one_release, :not_spent, "one tag that carries engine, every guest ELF, every GGUF, the Bonsai 2 service and the planner node under one SHA256SUMS (docs/release.md). Today: ninfer-all windows-service-v1.0.0 (15 assets), transport-meshing-pen v20261002-dev.2 (11 assets, five guests), model-explorer (1 DMG), and twelve guest/model repositories with no release. This is the R&D; serving Bonsai 2 is done."
     token :md5_in_lean, :not_spent, "entities/Frontier/Md5.lean, the handshake digest only; dies with :erlang_node_in_lean"
     token :http_server, :paid, "Std.Http from the Lean toolchain"
 
