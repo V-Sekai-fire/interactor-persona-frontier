@@ -39,18 +39,17 @@ defmodule Frontier.Tokens do
 
   ledger do
     # ---- innovation tokens: substrates this repository runs on
-    token :store, :token_2, "SQLite (vendored amalgamation) through c/sql.c; datasource-store's fdb_vfs.c linked in with -Kfdb, pages in FoundationDB. Smoke-tested 2026-11-04: a practice trace read back from weft/db/frontier/DELTA/, no local file."
+    token :store, :token_2, "SQLite (vendored amalgamation) through datasources/sqlite/sql.c; datasource-store's fdb_vfs.c linked in with -Kfdb, pages in FoundationDB. Smoke-tested 2026-11-04: a practice trace read back from weft/db/frontier/DELTA/, no local file."
     token :planner, :paid, "interactor-taskweft-persona (RECTGTN over JSON-LD) as a Lean library: the toolchain and planner Token 1's guests pay for, here as a host library"
-    token :erlang_node_in_lean, :not_spent, "Frontier/Dist.lean: EPMD ALIVE2, v6 handshake, pass-through ETF, REG_SEND in, SEND out. The ledger has no third token; retire or claim before a rung pins it. Boring substitute: a BEAM-side port or erl_interface C node."
-    token :md5_in_lean, :not_spent, "Frontier/Md5.lean, the handshake digest only; dies with :erlang_node_in_lean"
+    token :erlang_node_in_lean, :not_spent, "transports/Frontier/Dist.lean: EPMD ALIVE2, v6 handshake, pass-through ETF, REG_SEND in, SEND out. The ledger has no third token; retire or claim before a rung pins it. Boring substitute: a BEAM-side port or erl_interface C node."
+    token :md5_in_lean, :not_spent, "entities/Frontier/Md5.lean, the handshake digest only; dies with :erlang_node_in_lean"
     token :http_server, :paid, "Std.Http from the Lean toolchain"
 
     # ---- boring technology
-    token :beam, :boring, "Elixir for build.exs, deploy/pod.exs, PropCheck in test/node; tools and gates only"
+    token :beam, :boring, "Elixir for build.exs, deploy/pod.exs, PropCheck in transports/spec/node; tools and gates only"
     token :epmd, :boring, "Erlang's port mapper; runs beside the node in the pod from erlang:27-alpine"
-    token :c_shim, :boring, "one 60-line shim, c/sql.c"
+    token :c_shim, :boring, "one 60-line shim, datasources/sqlite/sql.c"
     token :elan_lake, :paid, "pinned by lean-toolchain"
-    token :k6, :boring, "deploy/k6.js, the challenge's thresholds"
     token :cloud_init_systemd, :boring, "deploy/cloud-init.yaml"
     token :almalinux_10_container, :boring, "Containerfile, two stages, FoundationDB client linked"
     token :digitalocean_s_1vcpu_2gb, :boring, "the box, $12.00/mo; one box is one cell (deploy/pod.exs): fdb 0.45 cpu/1024 MiB, node 0.45/768, epmd 0.10/64, constant; more capacity is more cells"
@@ -108,7 +107,7 @@ defmodule Frontier.Tokens do
       permission :learn, {:or, :http_caller, :erlang_peer}   # gated: positive and negative control
     end
 
-    # ---- subjects and stages, from knowledge/knowledge.json
+    # ---- subjects and stages, from entities/knowledge/knowledge.json
     subject :world, stages: ["1", "2", "4", "6", "7", "10"]
     subject :prop, stages: ["1", "2", "4", "6", "7", "10"]
     subject :character, stages: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]

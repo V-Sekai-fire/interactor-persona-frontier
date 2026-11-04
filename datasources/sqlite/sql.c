@@ -9,7 +9,7 @@
 #include <string.h>
 
 #ifdef FRONTIER_WITH_FDB
-// datasource-store's weft_fdb VFS, linked in (thirdparty/datasource-store/fdb_vfs.c): the
+// datasource-store's weft_fdb VFS, linked in (datasources/datasource-store/fdb_vfs.c): the
 // FoundationDB network starts once per process, then the VFS registers under `weft_fdb`.
 int weft_fdb_start(const char *cluster_file);
 int weft_vfs_register(int make_default);

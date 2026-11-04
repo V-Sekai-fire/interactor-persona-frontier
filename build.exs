@@ -60,8 +60,8 @@ defmodule Build do
     {:os_pid, os_pid} = Port.info(port, :os_pid)
     result =
       with {:ok, _} <- wait_registered(30),
-           {:ok, _} <- run("mix", ["deps.get"], cd: Path.join(@root, "test/node")),
-           {:ok, _} <- run("elixir", ["--name", "probe@127.0.0.1", "--cookie", cookie, "-S", "mix", "test"], cd: Path.join(@root, "test/node")) do
+           {:ok, _} <- run("mix", ["deps.get"], cd: Path.join(@root, "transports/spec/node")),
+           {:ok, _} <- run("elixir", ["--name", "probe@127.0.0.1", "--cookie", cookie, "-S", "mix", "test"], cd: Path.join(@root, "transports/spec/node")) do
         {:ok, :propcheck}
       end
     System.cmd("kill", [Integer.to_string(os_pid)])

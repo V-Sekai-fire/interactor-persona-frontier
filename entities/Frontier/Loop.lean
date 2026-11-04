@@ -157,9 +157,9 @@ def learn (k : Knowledge) : IO Json := do
   let pass := (field g "pass").getBool?.toOption.getD false
   if pass then
     Db.putKnowledge k2
-    IO.FS.writeFile "knowledge/knowledge.json" (k2.pretty ++ "\n")
-    IO.FS.writeFile "domains/character-stack.jsonld" (Gen.domain k2).compress
-    IO.FS.writeFile "plans/character-stack-cold.jsonld" (gold.compress ++ "\n")
+    IO.FS.writeFile "entities/knowledge/knowledge.json" (k2.pretty ++ "\n")
+    IO.FS.writeFile "entities/fixtures/domains/character-stack.jsonld" (Gen.domain k2).compress
+    IO.FS.writeFile "entities/fixtures/plans/character-stack-cold.jsonld" (gold.compress ++ "\n")
   return Json.mkObj [("revision", if pass then field k2 "revision" else field k "revision"), ("gate", g),
     ("requires", Json.mkObj ((stageIds k2).map fun n => (n, Json.arr ((requiresOf k2 n).map Json.str).toArray))), ("durations", field k2 "durations")]
 

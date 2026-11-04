@@ -13,7 +13,7 @@ def main : IO UInt32 := do
   let dbp : System.FilePath := "/tmp/frontier-witness.sqlite"
   if ← dbp.pathExists then IO.FS.removeFile dbp
   Db.override.set (some dbp.toString)
-  let k ← match Json.parse (← IO.FS.readFile "knowledge/knowledge.json") with | .ok k => pure k | .error e => throw (IO.userError e)
+  let k ← match Json.parse (← IO.FS.readFile "entities/knowledge/knowledge.json") with | .ok k => pure k | .error e => throw (IO.userError e)
   let mut ok := true
   -- MD5 against RFC 1321 vectors, and a planted fault
   ok := (← check "md5 empty" (Md5.hex (Md5.digest "".toUTF8) == "d41d8cd98f00b204e9800998ecf8427e")) && ok

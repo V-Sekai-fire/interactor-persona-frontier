@@ -1,0 +1,5 @@
+.lake/
+.git/
+transports/spec/node/_build/
+transports/spec/node/deps/
+frontier.sqlite

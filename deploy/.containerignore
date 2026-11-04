@@ -1,5 +1,0 @@
-.lake/
-.git/
-test/node/_build/
-test/node/deps/
-frontier.sqlite

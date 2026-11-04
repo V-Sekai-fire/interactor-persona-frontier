@@ -46,13 +46,13 @@ def countTraces : IO Nat := do
   let rows ← sql "SELECT count(*) AS n FROM traces;"
   return (rows[0]? >>= fun r => (r.getObjVal? "n").toOption >>= (·.getStr?.toOption) >>= String.toNat?).getD 0
 
-/-- The knowledge row; seeded from `knowledge/knowledge.json` when the table is empty. -/
+/-- The knowledge row; seeded from `entities/knowledge/knowledge.json` when the table is empty. -/
 def knowledge : IO Json := do
   let rows ← sql "SELECT body FROM knowledge WHERE id = 1;"
   match rows[0]? >>= fun r => (r.getObjVal? "body").toOption >>= (·.getStr?.toOption) >>= fun b => (Json.parse b).toOption with
   | some k => pure k
   | none =>
-    let text ← IO.FS.readFile "knowledge/knowledge.json"
+    let text ← IO.FS.readFile "entities/knowledge/knowledge.json"
     let k ← match Json.parse text with | .ok k => pure k | .error e => throw (IO.userError s!"knowledge.json: {e}")
     let rev := ((k.getObjVal? "revision").toOption >>= (·.getNat?.toOption)).getD 0
     let _ ← sql s!"INSERT INTO knowledge (id, body, revision) VALUES (1, {quote k.compress}, {rev});"

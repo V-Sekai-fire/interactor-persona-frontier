@@ -15,8 +15,7 @@ p95 passes 500 ms, p99 passes 1 s or more than 1 % of requests fail.
 
 The box is DigitalOcean's `s-1vcpu-2gb` Basic Droplet ($12.00/mo, $0.01786/hr), and one box is one cell:
 FoundationDB, epmd and this node colocated in one pod with constant shares (`deploy/pod.exs up|smoke|down`).
-More capacity is more cells. `deploy/cloud-init.yaml` builds the box, `deploy/k6.js` loads it with the
-challenge's thresholds.
+More capacity is more cells. `deploy/cloud-init.yaml` builds the box.
 
 | Route | Answer |
 | --- | --- |

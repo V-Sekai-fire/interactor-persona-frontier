@@ -7,7 +7,7 @@
 # AlmaLinux 10 and EPEL 10 carry no Erlang, so epmd runs beside the node in one pod, from the
 # stock Erlang image; the two share localhost.
 #
-#   podman build -t frontier .
+#   podman build -t frontier -f deploy/Containerfile .
 #   podman pod create --name frontier -p 9920:9920 -p 9930:9930 -p 4369:4369
 #   podman run -d --pod frontier --name epmd docker.io/library/erlang:27-alpine epmd -d
 #   podman run -d --pod frontier --name node -v frontier-data:/data \
@@ -24,11 +24,10 @@ ENV PATH=/root/.elan/bin:$PATH
 WORKDIR /src
 COPY lean-toolchain lakefile.lean lake-manifest.json ./
 RUN elan toolchain install "$(cat lean-toolchain)"
-COPY Main.lean Witness.lean ./
-COPY Frontier ./Frontier
-COPY c ./c
-COPY thirdparty ./thirdparty
-COPY knowledge ./knowledge
+COPY entities ./entities
+COPY repositories ./repositories
+COPY datasources ./datasources
+COPY transports ./transports
 RUN lake build -Kfdb=/usr/lib64/libfdb_c.so && ./.lake/build/bin/frontier_witness
 
 FROM almalinux:10
@@ -38,9 +37,8 @@ RUN dnf -y install curl-minimal pkgconf-pkg-config && dnf clean all \
  && rpm -i /tmp/fdb-clients.rpm && rm /tmp/fdb-clients.rpm
 WORKDIR /app
 COPY --from=build /src/.lake/build/bin/frontier /app/frontier
-COPY knowledge ./knowledge
-COPY domains ./domains
-COPY plans ./plans
+COPY entities/knowledge ./entities/knowledge
+COPY entities/fixtures ./entities/fixtures
 RUN mkdir -p /data && useradd -r -d /app frontier && chown -R frontier /app /data
 USER frontier
 ENV FRONTIER_DB=/data/frontier.sqlite
