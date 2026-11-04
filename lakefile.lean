@@ -23,15 +23,20 @@ extern_lib libfrontier_sql pkg := do
 lean_lib «Frontier» where
   srcDir := "."
 
+-- Lean's bundled clang/lld searches none of the distro library dirs, so name them.
+def sqliteLink : Array String :=
+  if System.Platform.isOSX then #["-L/opt/homebrew/opt/sqlite/lib", "-lsqlite3"]
+  else #["-L/usr/lib64", "-L/usr/lib/x86_64-linux-gnu", "-L/usr/lib/aarch64-linux-gnu", "-lsqlite3"]
+
 -- The server: HTTP/1.1 A2A on --port, and an Erlang distribution node on --dist-port.
 @[default_target]
 lean_exe «frontier» where
   root := `Main
-  moreLinkArgs := #["-L/opt/homebrew/opt/sqlite/lib", "-lsqlite3"]
+  moreLinkArgs := sqliteLink
 
 -- The green gate: the domain plans cold for every subject, the learn gate holds, MD5 and ETF
 -- round-trip, and a planted fault fails each.
 @[default_target]
 lean_exe «frontier_witness» where
   root := `Witness
-  moreLinkArgs := #["-L/opt/homebrew/opt/sqlite/lib", "-lsqlite3"]
+  moreLinkArgs := sqliteLink
