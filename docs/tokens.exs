@@ -151,7 +151,7 @@ defmodule Frontier.Tokens do
     token :interactor_usd_guest, :token_1, "guest"
     token :interactor_voice, :token_1, "guest"
     token :omnigen2_editscore7b_v1_1, :innovation, "image model, HF weights; replaces interactor-see-through-ggml"
-    token :sherpa_onnx_zipformer, :boring, "streaming Zipformer transducer on CPU; replaces mfcc-viseme-gan"
+    token :sherpa_onnx_zipformer, :boring, "streaming Zipformer (Icefall/k2) transducer on CPU; replaces mfcc-viseme-gan"
     token :silero_vad, :boring, "speech gate ahead of the recognizer"
     token :thorvg, :boring, "stock"
     token :weftspun_character_taxonomy, :boring, "Elixir service"
