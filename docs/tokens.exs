@@ -201,6 +201,26 @@ IO.puts("everything measured:                     shipped #{fmt.(sum.(served, :w
 IO.puts("not in the sum (unmeasured):             #{Enum.join(unmeasured, ", ")}")
 IO.puts("the box: s-1vcpu-2gb has 50 GB SSD and 2 GB RAM, so no model in the pipeline runs on the cell; the cell serves plans, the models run where their GPU is")
 
+# ---- residency on one RTX 4090 (24 GB): what stays, what rotates, as shipped and at 2 bits
+# Rule: the scorer and the planner stay resident; every stage model loads for its stage and
+# unloads after (rotating residency). The budget per rotation is the largest stage, not the sum.
+vram = 24.0
+resident = [:bonsai_2_27b_heretic_v2]
+stage_of = %{omnigen2_editscore7b_v1_1: 1, trellis2: 2, pixal3d: 2, skintokens_tokenrig: 4, p3_sam: 5, kimodo_motionbricks: 7, zipformer_sherpa_onnx: 8, silero_vad: 8, editscore_7b: 1}
+by_stage = served |> Enum.reject(fn {n, _} -> n in resident or stage_of[n] == nil end) |> Enum.group_by(fn {n, _} -> stage_of[n] end)
+res_shipped = sum.(Enum.filter(served, fn {n, _} -> n in resident end), :weights)
+res_two = two.(Enum.filter(served, fn {n, _} -> n in resident end))
+IO.puts("\n# rotating residency on one 4090 (#{vram} GB)")
+IO.puts("resident: #{Enum.join(resident, ", ")}  shipped #{fmt.(res_shipped)} GB · 2-bit #{fmt.(res_two)} GB  (plus the planner, no weights)")
+for {st, ms} <- Enum.sort(by_stage) do
+  sh_ = sum.(ms, :weights); tw = two.(ms)
+  fits_sh = sh_ + res_shipped + 2.0 <= vram; fits_tw = tw + res_two + 2.0 <= vram
+  IO.puts("stage #{st}: #{Enum.map_join(ms, ", ", &elem(&1, 0))}  shipped #{fmt.(sh_)} GB #{if fits_sh, do: "fits", else: "DOES NOT FIT"} · 2-bit #{fmt.(tw)} GB #{if fits_tw, do: "fits", else: "DOES NOT FIT"}")
+end
+peak_sh = by_stage |> Enum.map(fn {_, ms} -> sum.(ms, :weights) end) |> Enum.max()
+peak_tw = by_stage |> Enum.map(fn {_, ms} -> two.(ms) end) |> Enum.max()
+IO.puts("peak rotation + resident + 2 GB activations: shipped #{fmt.(peak_sh + res_shipped + 2)} GB · 2-bit #{fmt.(peak_tw + res_two + 2)} GB  against #{vram} GB")
+
 IO.puts("\n# tuples")
 missing =
   for {s, ss} <- subjects, {n, _name, req, draws} <- stages, Integer.to_string(n) in ss, reduce: [] do
