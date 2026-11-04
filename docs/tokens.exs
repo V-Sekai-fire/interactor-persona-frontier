@@ -60,7 +60,7 @@ defmodule Frontier.Tokens do
 
     # ---- language models and model images, as tokens
     model :omnigen2_editscore7b_v1_1, :innovation, "image generation + edit with the EditScore head; stage 1 model and judge (2026-11-04)", params: 7.7, weights: 31.3, source: "OmniGen2/OmniGen2 (4B DiT + Qwen2.5-VL-3B MLLM, stored fp32, 31.22 GB) + the v1.1 LoRA 0.08 GB"
-    model :editscore_7b, :boring, "pairwise image-edit judge; the MaskScore/EditScore ladders; a gate", params: 8.3, weights: 16.9, source: "Qwen2.5-VL-7B-Instruct 16.58 GB bf16 + adapter 0.32 GB"
+    model :editscore_7b, :retiring, "pairwise image-edit judge (Qwen2.5-VL-7B + adapter); retires when Bonsai 2 Heretic is trained as the judge on hf:chibifire (editscore-reward-train, editreward-bench, the twelve editscore-decider-* LoRA repos, all present but empty today) and clears the zero-shot baseline of 291/350 = 0.831 on EditReward-Bench", params: 8.3, weights: 16.9, source: "Qwen2.5-VL-7B-Instruct 16.58 GB bf16 + adapter 0.32 GB"
     model :llada_o, :retired, "diffusion LM image edit; beat OmniGen2 on one pair at 14x wall, n=1; retired 2026-11-04, OmniGen2-EditScore7B-v1.1 is the image model", params: 8.0, weights: 16.0, source: "LLaDA-8B base 16.03 GB bf16; LLaDA-O-8B weights gated"
     model :trellis2, :innovation, "image to textured mesh, stage 2", params: 4.0, weights: 8.1, source: "microsoft/TRELLIS.2-4B: 1.3B img2shape + 1.3B imgshape2tex DiTs at one resolution plus encoders, bf16; repo 16.24 GB with both 512 and 1024 variants"
     model :pixal3d, :innovation, "image to PBR mesh as a ggml-rd guest (RFD 2336); DINOv3 and BiRefNet HR paid with it", params: 0.55, weights: 1.65, source: "DINOv3 ViT-L 0.3B 1.21 GB fp32 + BiRefNet HR 0.22B 0.44 GB; Pixal3D head not published"
@@ -71,7 +71,7 @@ defmodule Frontier.Tokens do
     model :silero_vad, :boring, "speech gate ahead of Zipformer", params: 0.0018, weights: 0.002, source: "onnx-community/silero-vad model.onnx"
     model :xls_r, :not_spent, "rejected for stage 8: bidirectional attention misses the 150 ms budget", params: 0.3, weights: 1.27, source: "facebook/wav2vec2-xls-r-300m fp32"
     model :mfcc_viseme_gan_visemenet, :retired, "stage 8, replaced by Zipformer", source: "small archived GAN; size unmeasured"
-    model :bonsai_2_27b_heretic_v2, :boring, "OS-Software/Ternary-Bonsai-2-27B-Uncensored-Heretic-v2-GGUF: ternary Bonsai 2 with the Heretic OT-Ridge LoRA baked in (1/100 refusals, KL 0.0256), served by Prism llama.cpp or NInfer (RFD 2311, bonsai2-27b-heretic.ninfer); the local language model, a tool and a scorer, not in the product", params: 26.9, weights: 7.21, bits: 2.14, source: "PQ2_0 7.21 GB (2.14 bits/param), PTQ1_0 5.95 GB (1.77); the F16 original is 53.81 GB; mmproj Q8_0 0.63 GB"
+    model :bonsai_2_27b_heretic_v2, :boring, "OS-Software/Ternary-Bonsai-2-27B-Uncensored-Heretic-v2-GGUF: ternary Bonsai 2 with the Heretic OT-Ridge LoRA baked in (1/100 refusals, KL 0.0256), served by Prism llama.cpp or NInfer (RFD 2311, bonsai2-27b-heretic.ninfer); the local language model, a tool and a scorer, not in the product. Planned: one resident model as scorer AND stage-1 judge, trained on hf:chibifire; that removes EditScore-7B from the stage-1 rotation", params: 26.9, weights: 7.21, bits: 2.14, source: "PQ2_0 7.21 GB (2.14 bits/param), PTQ1_0 5.95 GB (1.77); the F16 original is 53.81 GB; mmproj Q8_0 0.63 GB"
     model :claude, :boring, "Anthropic Claude through Hermes: the agent that does this work; a tool, nothing of it ships", source: "parameter count and weights undisclosed by Anthropic; served, never downloaded"
     model :gemma_asr, :retired, "RFD 2180 dropped the gemma-auto track", source: "retired track; version and size not recorded"
     model :cyclegan_style_transfer, :retired, "stage 1, retired by the OmniGen2 decision", params: 0.011, weights: 0.045, source: "one ResNet generator, fp32"
@@ -222,6 +222,14 @@ peak_sh = by_stage |> Enum.map(fn {_, ms} -> sum.(ms, :weights) end) |> Enum.max
 peak_b = by_stage |> Enum.map(fn {_, ms} -> sumf.(ms, bf16) end) |> Enum.max()
 peak_q = by_stage |> Enum.map(fn {_, ms} -> sumf.(ms, q4) end) |> Enum.max()
 IO.puts("peak rotation + resident + 2 GB activations: shipped #{fmt.(peak_sh + res_shipped + 2)} GB · bf16 #{fmt.(peak_b + res_shipped + 2)} GB · 4-bit #{fmt.(peak_q + res_shipped + 2)} GB  against #{vram} GB")
+
+# ---- the same rotation once Bonsai 2 is the judge: EditScore-7B leaves stage 1
+by_stage2 = Map.update(by_stage, 1, [], fn ms -> Enum.reject(ms, fn {n, _} -> n == :editscore_7b end) end)
+peak = fn f -> by_stage2 |> Enum.map(fn {_, ms} -> sumf.(ms, f) end) |> Enum.max() end
+s1 = by_stage2[1]
+IO.puts("\n# the same rotation with Bonsai 2 trained as the judge (EditScore-7B out of stage 1)")
+IO.puts("stage 1: #{Enum.map_join(s1, ", ", &elem(&1, 0))}  shipped #{fmt.(sum.(s1, :weights))} GB · bf16 #{fmt.(sumf.(s1, bf16))} GB #{if sumf.(s1, bf16) + res_shipped + 2 <= vram, do: "fits", else: "DOES NOT FIT"} · 4-bit #{fmt.(sumf.(s1, q4))} GB")
+IO.puts("peak rotation + resident + 2 GB activations: bf16 #{fmt.(peak.(bf16) + res_shipped + 2)} GB · 4-bit #{fmt.(peak.(q4) + res_shipped + 2)} GB  against #{vram} GB; the bf16 peak is then Kimodo (stage 7), the one 4-bit that is still required")
 
 IO.puts("\n# tuples")
 missing =
