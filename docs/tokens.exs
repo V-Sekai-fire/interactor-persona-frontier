@@ -58,7 +58,7 @@ defmodule Frontier.Tokens do
     # ---- language models and model images, as tokens
     model :omnigen2_editscore7b_v1_1, :innovation, "image generation + edit with the EditScore head; stage 1 model and judge (2026-11-04)"
     model :editscore_7b, :boring, "pairwise image-edit judge; the MaskScore/EditScore ladders; a gate"
-    model :llada_o, :not_spent, "diffusion LM image edit; beats OmniGen2 on one pair at 14x wall, n=1; parked"
+    model :llada_o, :retired, "diffusion LM image edit; beat OmniGen2 on one pair at 14x wall, n=1; retired 2026-11-04, OmniGen2-EditScore7B-v1.1 is the image model"
     model :trellis2, :innovation, "image to textured mesh, stage 2"
     model :pixal3d, :innovation, "image to PBR mesh as a ggml-rd guest (RFD 2336); DINOv3 and BiRefNet HR paid with it"
     model :skintokens_tokenrig, :innovation, "auto-rig, stage 4; first forward pass logged"
