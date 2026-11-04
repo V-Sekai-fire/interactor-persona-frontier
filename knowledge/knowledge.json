@@ -50,8 +50,9 @@
   "8": {
    "tokens": [
     "interactor-headfit",
-    "mfcc-viseme-gan",
-    "interactor-voice"
+    "sherpa-onnx-zipformer",
+    "interactor-voice",
+    "silero-vad"
    ],
    "requires": [
     "3",

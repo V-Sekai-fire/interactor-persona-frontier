@@ -118,7 +118,8 @@ definition node {                          # the frontier process
 | token:interactor-usd-guest | Token 1 (guest) | subject:world, subject:prop, subject:character |
 | token:interactor-voice | Token 1 (guest) | subject:character |
 | token:mesh-segmentation-REPLACEMENT-WANTED | **REPLACE ASAP**: interactor-p3sam-mesh-segmentation is withdrawn (Tencent licence review pending); no owner yet, so every garment plan acquires a token nobody holds | subject:character |
-| token:mfcc-viseme-gan | innovation (archived model) | subject:character |
+| token:sherpa-onnx-zipformer | boring (streaming Zipformer transducer on CPU via sherpa-onnx; replaces mfcc-viseme-gan) | subject:character |
+| token:silero-vad | boring (speech gate ahead of the recognizer) | subject:character |
 | token:omnigen2-editscore7b-v1.1 | innovation (image model, HF weights; replaces interactor-see-through-ggml) | subject:world, subject:prop, subject:character |
 | token:thorvg | boring (stock) | subject:world, subject:prop, subject:character |
 | token:weftspun-character-taxonomy | boring (Elixir service) | subject:character |
@@ -147,7 +148,10 @@ Every model is a token too: weights are a substrate whose licence, size and host
 | SkinTokens (TokenRig) | auto-rig | stage 4 model image; logbook: first forward pass | innovation |
 | P3-SAM | mesh segmentation | stage 5; **withdrawn, licence review pending; replacement wanted** | retiring |
 | Kimodo, MotionBricks | text → motion, motion on ggml-rd | stage 7 model images and guest | innovation |
-| mfcc-viseme-gan, visemenet | speech → viseme | stage 8, archived 2021–22 models | already paid; retiring with the face model |
+| Zipformer (streaming transducer, sherpa-onnx) | speech → phoneme posteriors, CPU, ~5–10 ms per 160 ms chunk | stage 8 (operator, 2026-11-04): replaces mfcc-viseme-gan; phonemes map to the viseme set, EMA α≈0.65 over a 2-frame lookahead, 150–210 ms end to end | boring: ONNX on CPU, off the GPU the renderer holds |
+| Silero VAD | speech gate | stage 8, ahead of Zipformer so ambient noise never twitches the mouth | boring |
+| XLS-R | speech encoder | considered for stage 8 and rejected: bidirectional attention and memory footprint miss the 150 ms budget | not spent |
+| mfcc-viseme-gan, visemenet | speech → viseme | stage 8, archived 2021–22 models; replaced by Zipformer | retired |
 | Bonsai 27B | language model | `bonsai-steamframe-vulkan`, `ninfer-bonsai-artifacts`: a serving target, frozen weights in the Alyx planner hypothesis | boring: a tool, not in the product |
 | Qwen3.5-27B (turboquant, Hermes) | language model | `turboquant-qwen35-27b`: local server on this desk | boring: a tool |
 | Gemma (ASR track) | speech recognition | logbook RFD 1171 rerank; RFD 2180 dropped the gemma-auto track | retired |
