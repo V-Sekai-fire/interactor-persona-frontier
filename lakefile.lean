@@ -7,26 +7,30 @@ package «frontier» where
 -- The planner and its JSON-LD domain reader, as a library.
 require persona from git "https://github.com/V-Sekai-fire/interactor-taskweft-persona" @ "main"
 
--- The C shim: SQLite in, JSON rows out (c/sql.c). Homebrew's sqlite on macOS, the system one on Linux.
+-- The C shim: SQLite in, JSON rows out (c/sql.c), with the vendored SQLite amalgamation compiled
+-- beside it, so the node links no system SQLite on any platform.
 target sql.o pkg : System.FilePath := do
   let oFile := pkg.buildDir / "c" / "sql.o"
   let srcJob ← inputTextFile <| pkg.dir / "c" / "sql.c"
   let leanInc := (← getLeanIncludeDir).toString
-  let brew := "/opt/homebrew/opt/sqlite/include"
-  buildO oFile srcJob #["-I", leanInc, "-I", brew, "-fPIC", "-O2"] #[] "cc"
+  buildO oFile srcJob #["-I", leanInc, "-I", (pkg.dir / "thirdparty" / "sqlite").toString, "-fPIC", "-O2"] #[] "cc"
+
+target sqlite3.o pkg : System.FilePath := do
+  let oFile := pkg.buildDir / "c" / "sqlite3.o"
+  let srcJob ← inputTextFile <| pkg.dir / "thirdparty" / "sqlite" / "sqlite3.c"
+  buildO oFile srcJob #["-fPIC", "-O2", "-DSQLITE_THREADSAFE=1", "-DSQLITE_OMIT_LOAD_EXTENSION=0", "-DSQLITE_ENABLE_LOAD_EXTENSION=1"] #[] "cc"
 
 extern_lib libfrontier_sql pkg := do
   let name := nameToStaticLib "frontier_sql"
-  let job ← fetch <| pkg.target ``sql.o
-  buildStaticLib (pkg.staticLibDir / name) #[job]
+  let a ← fetch <| pkg.target ``sql.o
+  let b ← fetch <| pkg.target ``sqlite3.o
+  buildStaticLib (pkg.staticLibDir / name) #[a, b]
 
 lean_lib «Frontier» where
   srcDir := "."
 
--- Lean's bundled clang/lld searches none of the distro library dirs, so name them.
-def sqliteLink : Array String :=
-  if System.Platform.isOSX then #["-L/opt/homebrew/opt/sqlite/lib", "-lsqlite3"]
-  else #["-L/usr/lib64", "-L/usr/lib/x86_64-linux-gnu", "-L/usr/lib/aarch64-linux-gnu", "-lsqlite3"]
+-- SQLite is vendored and compiled in; only libdl and libm are needed beside it on Linux.
+def sqliteLink : Array String := if System.Platform.isOSX then #[] else #["-ldl", "-lm", "-lpthread"]
 
 -- The server: HTTP/1.1 A2A on --port, and an Erlang distribution node on --dist-port.
 @[default_target]

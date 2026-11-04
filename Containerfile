@@ -8,7 +8,7 @@
 # FoundationDB is not in this image: mount datasource-store's libweftfdb and set FRONTIER_DB,
 # FRONTIER_VFS_EXT and WEFT_FDB_CLUSTER_FILE to put the pages in a cluster beside it.
 FROM almalinux:10 AS build
-RUN dnf -y install gcc gcc-c++ make git curl-minimal sqlite-devel ca-certificates && dnf clean all
+RUN dnf -y install gcc gcc-c++ make git curl-minimal ca-certificates && dnf clean all
 RUN curl -sSfL https://elan.lean-lang.org/elan-init.sh | sh -s -- -y --default-toolchain none
 ENV PATH=/root/.elan/bin:$PATH
 WORKDIR /src
@@ -17,11 +17,12 @@ RUN elan toolchain install "$(cat lean-toolchain)"
 COPY Main.lean Witness.lean ./
 COPY Frontier ./Frontier
 COPY c ./c
+COPY thirdparty ./thirdparty
 COPY knowledge ./knowledge
 RUN lake build && ./.lake/build/bin/frontier_witness
 
 FROM almalinux:10
-RUN dnf -y install sqlite-libs erlang-erts erlang-kernel erlang-stdlib && dnf clean all
+RUN dnf -y install erlang-erts erlang-kernel erlang-stdlib && dnf clean all
 WORKDIR /app
 COPY --from=build /src/.lake/build/bin/frontier /app/frontier
 COPY knowledge ./knowledge

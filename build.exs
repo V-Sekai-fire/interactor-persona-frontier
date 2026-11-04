@@ -72,7 +72,6 @@ defmodule Build do
   def main do
     steps = [
       fn -> elan() end,
-      fn -> sqlite_headers() end,
       fn -> need("erl", "erlang", "erlang-dev") end,
       fn -> need("epmd", "erlang", "erlang-epmd") end,
       fn -> need("cc", "gcc", "build-essential") end,
