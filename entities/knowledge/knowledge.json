@@ -85,6 +85,7 @@
   "5": {
    "tokens": [
     "point-sam",
+    "geosam2",
     "interactor-remesh",
     "interactor-garment-fit",
     "interactor-cloth-fit-guest",

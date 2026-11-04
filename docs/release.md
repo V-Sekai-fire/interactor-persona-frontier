@@ -31,7 +31,7 @@ and summed:
 | `libgodot_riscv` per platform | `service-godot-build` | in the pen release |
 | guests: curvenet, dress_on, mujoco, rd_worker, usd | the pen's build | in the pen release |
 | guests: skintokens, motion (Kimodo + MotionBricks), voice, cloth-fit, garment-fit, drape, bake, remesh, cage, anny-fit, headfit | their repositories' `tools/build.exs` | **missing**: no release builds them |
-| GGUF: SkinTokens (1.25 GB), Kimodo body (15.2 GB), Kimodo SOMA (1.1 GB), MotionBricks (0.7 GB) | `hf:chibifire`, by hash | **missing from the release**; GitHub's 2 GiB asset cap means the 15 GB body ships split as `ninfer-all` splits its model, or stays a hash-checked HF fetch like RFD 2380's rig packages |
+| every weight, 14 rows, 77 GB (`deploy/weights.exs list`) | `hf:chibifire` by hash; 8 rows still live on upstream orgs and are the mirroring left | **the one place**: `deploy/weights.exs fetch <dir>` preloads all of it with `SHA256SUMS` from the hub's LFS hashes, `verify` re-checks offline, `self-test` proves verify fails on a planted byte (passed on the two smallest rows). GitHub's 2 GiB cap keeps weights off the release assets; the release pins the manifest and its sums |
 | the language model's service and its model (Bonsai 2 PQ2_0, 7.2 GB) | `ninfer-all` | released alone, Windows only; the one release carries the same assets or pins that tag by hash |
 | the planner node (`frontier`) and its knowledge seed | this repository, `deploy/Containerfile` | built, never released |
 | `SHA256SUMS` over all of it, and a `CITATION.cff` with the tag as a Go pseudo-version (RFD 2312) | the release job | per part today, never once |
