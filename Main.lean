@@ -11,7 +11,7 @@ Users Can a $12 Server Handle?"): 1 vCPU, 2 GB, everything on the machine, k6 vi
 p95 passes 500 ms, p99 passes 1 s or more than 1 % of requests fail.
 
     elixir build.exs                                              one command: deps, lake build, witness, PropCheck
-    frontier --port 9920 --dist-port 9930 --cookie <cookie>      (or --cookie-file <path>)
+    frontier --port 9920 --dist-port 9930 --cookie <cookie>      (or --cookie-file <path>; --host 0.0.0.0 in a container)
 
 The box is DigitalOcean's `s-1vcpu-2gb` Basic Droplet ($12.00/mo, $0.01786/hr): `deploy/cloud-init.yaml`
 builds it, `deploy/k6.js` loads it with the challenge's thresholds.
@@ -93,10 +93,17 @@ def handler (url : String) : Server.StatelessHandler where
     let status : Status := if code == 200 then .ok else if code == 404 then .notFound else .internalServerError
     (Response.withStatus status).json json.compress
 
+def parseIPv4 (s : String) : Option Std.Net.IPv4Addr :=
+  match (s.splitOn ".").map String.toNat? with
+  | [some a, some b, some c, some d] => if a < 256 && b < 256 && c < 256 && d < 256 then some (Std.Net.IPv4Addr.ofParts a.toUInt8 b.toUInt8 c.toUInt8 d.toUInt8) else none
+  | _ => none
+
 def option (args : List String) (flag : String) : Option String :=
   match args.dropWhile (· != flag) with | _ :: v :: _ => some v | _ => none
 
 def main (args : List String) : IO UInt32 := do
+  let host := (option args "--host").getD "127.0.0.1"
+  let some ip := parseIPv4 host | IO.eprintln s!"frontier: --host must be an IPv4 address, got '{host}'"; return 2
   let port := ((option args "--port").bind String.toNat?).getD 9920
   let distPort := ((option args "--dist-port").bind String.toNat?).getD 9930
   let cookie ← match option args "--cookie", option args "--cookie-file" with
@@ -108,12 +115,12 @@ def main (args : List String) : IO UInt32 := do
       if ← p.pathExists then pure (← IO.FS.readFile p).trimAscii.toString else pure "frontier"
   Db.init
   let _ ← Db.knowledge
-  let url := s!"http://127.0.0.1:{port}/"
+  let url := s!"http://{host}:{port}/"
   IO.println s!"frontier on {url} (HTTP/1.1), db {← Db.url}"
   (← IO.getStdout).flush
   let answer (t : String) : IO String := do return (← command t).compress
-  let _ ← IO.asTask (Async.block (Dist.run answer { port := distPort.toUInt16, cookie }))
+  let _ ← IO.asTask (Async.block (Dist.run answer { host, ip, port := distPort.toUInt16, cookie }))
   Async.block do
-    let server ← Server.serve (.v4 ⟨Dist.loopback, port.toUInt16⟩) (handler url) { maxBodySize := 1048576 }
+    let server ← Server.serve (.v4 ⟨ip, port.toUInt16⟩) (handler url) { maxBodySize := 1048576 }
     server.waitShutdown
   return 0

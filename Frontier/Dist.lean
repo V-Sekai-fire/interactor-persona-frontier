@@ -22,6 +22,7 @@ open Std Async TCP Etf
 structure Config where
   name : String := "frontier"
   host : String := "127.0.0.1"
+  ip : Net.IPv4Addr := Net.IPv4Addr.ofParts 127 0 0 1
   port : UInt16 := 9930
   cookie : String
 
@@ -121,7 +122,7 @@ partial def run (answer : String → IO String) (c : Config) : Async Unit := do
   let (epmd, creation) ← registerEpmd c
   epmdSocket.set (some epmd)
   let srv ← Socket.Server.mk
-  srv.bind (.v4 ⟨loopback, c.port⟩)
+  srv.bind (.v4 ⟨c.ip, c.port⟩)
   srv.listen 8
   IO.println s!"dist: {fullName c} on {c.host}:{c.port}, creation {creation}, registered with epmd"
   (← IO.getStdout).flush
