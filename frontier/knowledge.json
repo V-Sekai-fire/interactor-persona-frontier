@@ -73,14 +73,14 @@
    ]
   },
   "6": {
-   "name": "materials",
+   "name": "look-render",
    "requires": [
     "2",
     "5"
    ],
    "tokens": [
-    "entities-godot-toon-shaders",
-    "contract-materialx-shaders-lean"
+    "interactor-slughorn",
+    "thorvg"
    ]
   },
   "7": {

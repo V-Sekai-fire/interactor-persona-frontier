@@ -15,6 +15,7 @@ Non-fork repositories whose name or description matches the character-pipeline k
 | 2026-11-02 | interactor-voice | C++ | 0 | Voice as sequenced Opus packets in a godot-sandbox guest |
 | 2026-11-02 | transport-meshing-pen | GDScript | 0 |  |
 | 2026-11-01 | contract-guest-common | C++ | 0 | The shared headers the dress-on guests include: blake3 and the mesh wire format |
+| 2026-10-01 | [interactor-slughorn](https://github.com/V-Sekai-fire/interactor-slughorn) | C++ | 1 | Slug GPU vector rendering with SVG, ThorVG, FreeType, Skia, Cairo and Blend2D backends: the stage 6 look renderer. Added by hand; its description is empty, so the keyword survey missed it. |
 | 2026-11-01 | entities-godot-toon-shaders | GDScript | 1 | Godot ports + a shared parameter map for avatar toon shaders (MToon 0.x / MToon10, with planned SCSS and lilToon ports) to ease cross-shader |
 | 2026-11-01 | interactor-bake | C++ | 0 | Alpha culling and texture atlases for avatar meshes as a godot-sandbox guest, the CPU part of RFD 2284's bake stage |
 | 2026-11-01 | interactor-cloth-fit-guest | Lean | 0 | The cloth-fit stage as a godot-sandbox guest whose compute runs on the GPU (no CPU path) |

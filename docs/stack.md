@@ -23,7 +23,7 @@ dressed body
   │ 5 garments          p3sam-mesh-segmentation → interactor-remesh → garment-fit → cloth-fit-guest → drape → bake
   ▼
 shaded character
-  │ 6 materials         entities-godot-toon-shaders · contract-materialx-shaders-lean · godot-sheen-look-up-table
+  │ 6 look render       interactor-slughorn (SVG · ThorVG · Slug GPU vector) · entities-godot-toon-shaders (retiring)
   ▼
 moving character
   │ 7 motion            kimodo-text-to-motion · interactor-motion-guest · motion-retarget (SOMA30) · motion-matching-guest
@@ -49,7 +49,7 @@ Interchange between stages: OpenUSD (`.usda`, UsdSkel sublayer from skintokens-a
 | 3 | Body fit | Search (in-guest L-BFGS over ANNY sliders; Lean-emitted forward/backward kernels) | ANNY parametric body itself: a hand-built prior with ~100 sliders | A learned body model fitted on `datasource-anny-render-corpus` beats ANNY on keypoint reprojection |
 | 4 | Rig/skin | Learning (SkinTokens auto-rig) | Humanoid bone naming; biharmonic cage bind; Delta Mush (DQS blocklisted) | SkinTokens weights pass the range-of-motion test bank with no cage |
 | 5 | Garments | Search (PolyFEM/IPC fit, AVBD drape: physics as a solver, GPU-only) | Segmentation labels (P3-SAM), remesh targets, body-only fit rule | A learned draper reproduces the AVBD result at interactive rate |
-| 6 | Materials | None yet: hand-written shader ports | MToon 0.x/10 parameter map, MaterialX in Lean, sheen LUT | Toon-to-PBR chart is regressed from renders instead of hand-charted |
+| 6 | Look render | Compute (Slug: exact Bezier evaluation per fragment, no tessellation; quality grows with the fragment budget) | SVG/ThorVG vector assets are data; the MToon parameter map and MaterialX ports are hand-written and retire as stage 1 emits vector layers | Stage 1 output feeds `interactor-slughorn` directly and no hand-ported shader remains |
 | 7 | Motion | Learning (Kimodo, MotionBricks on ggml-rd) + search (motion matching over a clip database) | SOMA30→humanoid retarget tables; G1 sim-to-real joint envelopes | Text-to-motion clips outscore the matched database on the walk-mode baseline |
 | 8 | Face/voice | Learning (MFCC→viseme GAN; unified expression transfer) | ARKit/Vive 124-morph template; viseme set | A speech-conditioned face model drives the template without the viseme intermediate |
 | 9 | Persona | Search (HTN / RECTGTN planner); GRAFCET sequential-function-chart personas are retired | **The planning domain is hand-written content.** `interactor-taskweft-persona` answers "from a planning domain instead of a neural network" | Domains are induced from MaskScore traces and play logs, not authored |
@@ -59,7 +59,7 @@ Interchange between stages: OpenUSD (`.usda`, UsdSkel sublayer from skintokens-a
 
 Pilled. Stages 1, 2, 4, 7 and 8 are learned models, and the stack already pairs them with inference-time search: a learned scorer picks among samples (stage 1), orbit views vote (stage 2), motion matching searches a clip set (stage 7). Stage 3's L-BFGS fit and stage 5's physics solvers are search over a model; their performance grows with GPU time, which is why `cloth-fit-guest` has no CPU path. Stage 10 exists to keep the compute axis open: guest ELFs run the same kernel on three GPU APIs.
 
-Not pilled, by choice. ANNY (stage 3), the toon shader map (stage 6) and the planning domains (stage 9) are hand-encoded content. ANNY is the defensible case, Brooks's objection in practice: a low-parameter body prior makes the fit data-cheap, the same way convolution made vision cheap, and the render corpus exists to replace it. The shader map is a port, not a method, and has no scaling axis. The persona domain is the exposed position: a planner is a general method, but a domain written by hand plateaus exactly where Sutton says it does. Silver and Sutton's "era of experience" reading points at the fix the stack already half-holds: `interactor-taskweft-nmm-personas` records MaskScore traces of play, so the domain can be learned from those traces while the planner stays. Its IEC 60848 GRAFCET persona controllers are retired: a sequential function chart is authored content with no scaling axis (a fixed step/transition graph plateaus the moment the game changes), and the frontier loop in this repository replaces it, keeping only the traces as experience.
+Not pilled, by choice. ANNY (stage 3) and the planning domains (stage 9) are hand-encoded content. Stage 6 is on the compute path: `interactor-slughorn` renders SVG and ThorVG vector content with Slug's exact per-fragment curve evaluation, so the look is data and one general shader replaces the hand-ported toon and MaterialX shaders. ANNY is the defensible case, Brooks's objection in practice: a low-parameter body prior makes the fit data-cheap, the same way convolution made vision cheap, and the render corpus exists to replace it. The remaining MToon map and MaterialX port are ports, not methods, and retire with the vector path. The persona domain is the exposed position: a planner is a general method, but a domain written by hand plateaus exactly where Sutton says it does. Silver and Sutton's "era of experience" reading points at the fix the stack already half-holds: `interactor-taskweft-nmm-personas` records MaskScore traces of play, so the domain can be learned from those traces while the planner stays. Its IEC 60848 GRAFCET persona controllers are retired: a sequential function chart is authored content with no scaling axis (a fixed step/transition graph plateaus the moment the game changes), and the frontier loop in this repository replaces it, keeping only the traces as experience.
 
 Binding constraint. For stages 1–2 and 7–8 the limit is licensed training data, not compute: the blocklist and dataset allow/blocklist directories gate every corpus, the COCO holdout is blinded, and generated data carries four conditions. More compute does not lift that limit, so the scaling plan for those stages is "more constructed data from assets we hold" (ANNY renders, orbit views), which is the GPU-bound path.
 
@@ -75,7 +75,7 @@ Each row swaps hand-written knowledge for a learned or searched method and leave
 
 ## Gaps
 
-- Stage 6 has no learned or searched component and no corpus to grow one.
+- Stage 6 has no learned component: Slug is exact compute, and its vector content comes from stage 1 only once `interactor-see-through-ggml`'s layer decomposition emits SVG.
 - Stage 9's trace-to-domain induction has no repository.
 - No end-to-end gate runs a photo through stages 1–10 to a loaded guest; per-stage probes exist (Gate 0G for usd.elf). The retired web studio's rig-contract gate (`[API-Contract] PASS`) has no successor in the guest pipeline.
 - `persona-fire` (chibifire-stages, 2023) carries no description; its relation to `interactor-taskweft-persona` is unknown.
