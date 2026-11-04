@@ -1,0 +1,121 @@
+{
+ "durations": {},
+ "learned": {},
+ "revision": 0,
+ "stages": {
+  "1": {
+   "name": "look-dev",
+   "requires": [],
+   "tokens": [
+    "interactor-see-through-ggml",
+    "interactor-cyclegan-style-transfer"
+   ]
+  },
+  "10": {
+   "name": "runtime",
+   "requires": [
+    "6",
+    "7",
+    "8",
+    "9"
+   ],
+   "tokens": [
+    "contract-ggml-rd",
+    "contract-command",
+    "interactor-usd-guest",
+    "godot-vrm"
+   ]
+  },
+  "2": {
+   "name": "image-to-3d",
+   "requires": [
+    "1"
+   ],
+   "tokens": [
+    "interactor-trellis2-image-to-textured-mesh",
+    "contract-orbit-views"
+   ]
+  },
+  "3": {
+   "name": "body",
+   "requires": [
+    "2"
+   ],
+   "tokens": [
+    "interactor-anny-fit",
+    "interactor-headfit",
+    "contract-anny-kernels"
+   ]
+  },
+  "4": {
+   "name": "rig",
+   "requires": [
+    "3"
+   ],
+   "tokens": [
+    "interactor-skintokens-auto-rig",
+    "interactor-skintokens-guest",
+    "interactor-cage"
+   ]
+  },
+  "5": {
+   "name": "garments",
+   "requires": [
+    "4"
+   ],
+   "tokens": [
+    "interactor-p3sam-mesh-segmentation",
+    "interactor-remesh",
+    "interactor-garment-fit",
+    "interactor-cloth-fit-guest",
+    "interactor-drape",
+    "interactor-bake"
+   ]
+  },
+  "6": {
+   "name": "materials",
+   "requires": [
+    "2",
+    "5"
+   ],
+   "tokens": [
+    "entities-godot-toon-shaders",
+    "contract-materialx-shaders-lean"
+   ]
+  },
+  "7": {
+   "name": "motion",
+   "requires": [
+    "4"
+   ],
+   "tokens": [
+    "interactor-kimodo-text-to-motion",
+    "interactor-motion-retarget",
+    "interactor-motion-matching-guest"
+   ]
+  },
+  "8": {
+   "name": "face-voice",
+   "requires": [
+    "3",
+    "4"
+   ],
+   "tokens": [
+    "interactor-headfit",
+    "mfcc-viseme-gan",
+    "interactor-voice"
+   ]
+  },
+  "9": {
+   "name": "persona",
+   "requires": [
+    "8"
+   ],
+   "tokens": [
+    "interactor-taskweft-persona",
+    "interactor-a2a",
+    "weftspun-character-taxonomy"
+   ]
+  }
+ }
+}

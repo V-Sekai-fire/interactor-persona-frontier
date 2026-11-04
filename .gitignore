@@ -1,0 +1,4 @@
+problems/.request-*.jsonld
+problems/.gate.jsonld
+domains/.candidate.jsonld
+domains/.broken.jsonld
