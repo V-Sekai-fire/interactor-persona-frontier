@@ -10,6 +10,7 @@ is `Std.Http`, and the Erlang node is `Frontier.Dist`. The challenge (Arjay McCa
 Users Can a $12 Server Handle?"): 1 vCPU, 2 GB, everything on the machine, k6 virtual users until
 p95 passes 500 ms, p99 passes 1 s or more than 1 % of requests fail.
 
+    nu build.nu                                                   one command: deps, lake build, witness, PropCheck
     frontier --port 9920 --dist-port 9930 --cookie <cookie>      (or --cookie-file <path>)
 
 The box is DigitalOcean's `s-1vcpu-2gb` Basic Droplet ($12.00/mo, $0.01786/hr): `deploy/cloud-init.yaml`
