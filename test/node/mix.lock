@@ -1,0 +1,6 @@
+%{
+  "jason": {:hex, :jason, "1.4.5", "2e3a008590b0b8d7388c20293e9dcc9cf3e5d642fd2a114e4cbbb52e595d940a", [:mix], [{:decimal, "~> 1.0 or ~> 2.0 or ~> 3.0", [hex: :decimal, repo: "hexpm", optional: true]}], "hexpm", "b0c823996102bcd0239b3c2444eb00409b72f6a140c1950bc8b457d836b30684"},
+  "libgraph": {:hex, :libgraph, "0.17.1", "7239836272a96bd4835f8d6cf6e8c6bad21141d5d47da81b2da15cdf9231fcfd", [:mix], [], "hexpm", "9e57ef93a40f9e455cfee06b9bfb3eaa66d980bd27f7d1a6f7b34475d3157b02"},
+  "propcheck": {:hex, :propcheck, "1.5.0", "df6f554a97eba4f92c3e4bc7758c8480e8bc401188af32cfe09641e81d8a55ba", [:mix], [{:libgraph, "~> 0.13", [hex: :libgraph, repo: "hexpm", optional: false]}, {:proper, "~> 1.5", [hex: :proper, repo: "hexpm", optional: false]}], "hexpm", "3388aa7909277faed166dfced39fad6ecae3c3be064352d37646be459fc80e09"},
+  "proper": {:hex, :proper, "1.5.0", "4a87ce8b219858e64c9aa015f4f7ed739d0ac3ca6bfd77fa62794617ee784225", [:rebar3], [], "hexpm", "fbf7cf0625e5441a314514f7d8e1eaff52090fcd94ff34b5171ff293d3f9969a"},
+}

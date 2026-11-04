@@ -1,0 +1,90 @@
+# One $12-server box: FoundationDB, the store's VFS, the Lean node, an Elixir peer. The Lean
+# witness is the unit gate; the PropCheck suite drives the node over the Erlang distribution
+# with its pages in FoundationDB; the last step reads those pages back from fdbcli, so a run that
+# quietly fell back to a local file fails.
+name: node
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  node:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    env:
+      STORE_VERSION: abb688b70be3dc160c2cf5f32ff7d8e05da799ba
+      COOKIE: ci-frontier
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: FoundationDB 7.3.63, server and client
+        run: |
+          curl -sLO https://github.com/apple/foundationdb/releases/download/7.3.63/foundationdb-server_7.3.63-1_amd64.deb
+          curl -sLO https://github.com/apple/foundationdb/releases/download/7.3.63/foundationdb-clients_7.3.63-1_amd64.deb
+          sudo dpkg -i foundationdb-clients_7.3.63-1_amd64.deb foundationdb-server_7.3.63-1_amd64.deb
+          sudo systemctl restart foundationdb
+          for i in $(seq 1 30); do
+            fdbcli --exec "status minimal" --timeout 5 2>/dev/null | grep -q available && break
+            [ "$i" = 30 ] && { fdbcli --exec status --timeout 10; exit 1; }
+            sleep 2
+          done
+          fdbcli --exec "status minimal" --timeout 10
+
+      - name: Build toolchain, SQLite, Erlang and Elixir
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake libsqlite3-dev sqlite3
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.2"
+          elixir-version: "1.18.3"
+
+      - name: datasource-store at a pinned commit, the weftfdb loadable VFS
+        uses: actions/checkout@v4
+        with:
+          repository: V-Sekai-fire/datasource-store
+          ref: ${{ env.STORE_VERSION }}
+          path: datasource-store
+          token: ${{ secrets.STORE_TOKEN || github.token }}
+      - run: |
+          cmake -S datasource-store -B datasource-store/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build datasource-store/build --target weftfdb -j
+          ls -la datasource-store/build/libweftfdb.so
+
+      - name: Lean toolchain from lean-toolchain
+        run: |
+          curl -sSfL https://github.com/leanprover/elan/releases/latest/download/elan-x86_64-unknown-linux-gnu.tar.gz | tar xz
+          ./elan-init -y --default-toolchain "$(cat lean-toolchain)"
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: lake build
+        run: lake build
+
+      - name: Witness (unit gate, local SQLite file)
+        run: ./.lake/build/bin/frontier_witness
+
+      - name: The node, pages in FoundationDB
+        env:
+          FRONTIER_DB: file:frontier?vfs=weft_fdb
+          FRONTIER_VFS_EXT: ${{ github.workspace }}/datasource-store/build/libweftfdb
+          WEFT_FDB_CLUSTER_FILE: /etc/foundationdb/fdb.cluster
+        run: |
+          epmd -daemon
+          nohup ./.lake/build/bin/frontier --port 9920 --dist-port 9930 --cookie "$COOKIE" > frontier.log 2>&1 &
+          for i in $(seq 1 30); do grep -q "registered with epmd" frontier.log && break; sleep 1; done
+          cat frontier.log
+          epmd -names | grep "name frontier at port 9930"
+          curl -sf -X POST localhost:9920/ -d '{"jsonrpc":"2.0","id":1,"method":"message/send","params":{"message":{"role":"user","parts":[{"text":"world"}]}}}' | head -c 300; echo
+
+      - name: PropCheck through the Erlang distribution
+        working-directory: test/node
+        run: |
+          mix deps.get
+          elixir --name probe@127.0.0.1 --cookie "$COOKIE" -S mix test
+
+      - name: The pages are in FoundationDB, not a local file
+        run: |
+          test ! -e frontier.sqlite
+          fdbcli --exec "getrange weft/ weft0 3" --timeout 10 | tee fdb-keys.txt
+          grep -q "^`weft/" fdb-keys.txt

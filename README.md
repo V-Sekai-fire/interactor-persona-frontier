@@ -10,7 +10,7 @@ Ask for a goal (`world`, `prop 7`, `garments`, `reach-character-10`) and the ans
 
 Ask for your own goal, report one real stage run, and read `frontier/knowledge.json` to see what changed.
 
-Props and worlds run their own subsets of the stages, GPU-skinned like the characters. The commands, routes, gate, measurements and limits are documented at the top of `server.exs`; the grading of the stages and the repository survey sit in `docs/`.
+Props and worlds run their own subsets of the stages, GPU-skinned like the characters. The routes, the Erlang node and the store are documented at the top of `Main.lean` and `Frontier/Dist.lean`; `.github/workflows/node.yml` is the $12-server run (FoundationDB, the store's VFS, the node, a PropCheck peer, one box); the grading of the stages and the repository survey sit in `docs/`.
 
 ## Licence
 
