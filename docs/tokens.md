@@ -81,7 +81,7 @@ definition node {                          # the frontier process
 | stage:character-2 (image-to-3d) | stage:character-1 | token:interactor-trellis2-image-to-textured-mesh, token:contract-orbit-views |
 | stage:character-3 (body) | stage:character-2 | token:interactor-anny-fit, token:interactor-headfit, token:contract-anny-kernels |
 | stage:character-4 (gpu-skin) | stage:character-3 | token:interactor-skintokens-auto-rig, token:interactor-skintokens-guest, token:interactor-cage, token:contract-ggml-rd |
-| stage:character-5 (garments) | stage:character-4 | token:mesh-segmentation-REPLACEMENT-WANTED, token:interactor-remesh, token:interactor-garment-fit, token:interactor-cloth-fit-guest, token:interactor-drape, token:interactor-bake |
+| stage:character-5 (garments) | stage:character-4 | token:interactor-p3sam-mesh-segmentation, token:interactor-remesh, token:interactor-garment-fit, token:interactor-cloth-fit-guest, token:interactor-drape, token:interactor-bake |
 | stage:character-6 (look-render) | stage:character-2, stage:character-5 | token:interactor-slughorn, token:thorvg |
 | stage:character-7 (gpu-motion) | stage:character-4 | token:interactor-kimodo-text-to-motion, token:interactor-motion-retarget, token:interactor-motion-matching-guest |
 | stage:character-8 (face-voice) | stage:character-3, stage:character-4 | token:interactor-headfit, token:mfcc-viseme-gan, token:interactor-voice |
