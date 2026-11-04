@@ -10,7 +10,10 @@ is `Std.Http`, and the Erlang node is `Frontier.Dist`. The challenge (Arjay McCa
 Users Can a $12 Server Handle?"): 1 vCPU, 2 GB, everything on the machine, k6 virtual users until
 p95 passes 500 ms, p99 passes 1 s or more than 1 % of requests fail.
 
-    frontier --port 9920 --dist-port 9930 --cookie <cookie>
+    frontier --port 9920 --dist-port 9930 --cookie <cookie>      (or --cookie-file <path>)
+
+The box is DigitalOcean's `s-1vcpu-2gb` Basic Droplet ($12.00/mo, $0.01786/hr): `deploy/cloud-init.yaml`
+builds it, `deploy/k6.js` loads it with the challenge's thresholds.
 
 | Route | Answer |
 | --- | --- |
@@ -95,9 +98,10 @@ def option (args : List String) (flag : String) : Option String :=
 def main (args : List String) : IO UInt32 := do
   let port := ((option args "--port").bind String.toNat?).getD 9920
   let distPort := ((option args "--dist-port").bind String.toNat?).getD 9930
-  let cookie ← match option args "--cookie" with
-    | some c => pure c
-    | none => do
+  let cookie ← match option args "--cookie", option args "--cookie-file" with
+    | some c, _ => pure c
+    | none, some f => pure (← IO.FS.readFile f).trimAscii.toString
+    | none, none => do
       let home := (← IO.getEnv "HOME").getD "."
       let p : System.FilePath := home / ".erlang.cookie"
       if ← p.pathExists then pure (← IO.FS.readFile p).trimAscii.toString else pure "frontier"

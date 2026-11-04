@@ -1,0 +1,42 @@
+#cloud-config
+# The $12 server: DigitalOcean Basic Droplet s-1vcpu-2gb (Regular shared CPU, 1 vCPU, 2 GB,
+# 50 GB SSD, 2 TB transfer, $12.00/mo, $0.01786/hr; pricing table row "2 GiB · 1 vCPU", slug from
+# GET /v2/sizes). Everything runs on this one box: FoundationDB, the store's VFS, the Lean node.
+#
+#   doctl compute droplet create frontier --size s-1vcpu-2gb --image ubuntu-24-04-x64 \
+#     --region nyc3 --ssh-keys <id> --user-data-file deploy/cloud-init.yaml --wait
+#
+# FRONTIER_REF and STORE_VERSION pin what is built; the cookie is written once at boot.
+package_update: true
+packages: [build-essential, cmake, libsqlite3-dev, sqlite3, curl, git, erlang-base, erlang-dev, erlang-epmd]
+write_files:
+  - path: /etc/frontier.env
+    permissions: "0600"
+    content: |
+      FRONTIER_DB=file:frontier?vfs=weft_fdb
+      FRONTIER_VFS_EXT=/opt/datasource-store/build/libweftfdb
+      WEFT_FDB_CLUSTER_FILE=/etc/foundationdb/fdb.cluster
+      FRONTIER_REF=main
+      STORE_VERSION=abb688b70be3dc160c2cf5f32ff7d8e05da799ba
+  - path: /etc/systemd/system/frontier.service
+    content: |
+      [Unit]
+      Description=frontier: HTTP A2A and Erlang node, pages in FoundationDB
+      After=foundationdb.service epmd.service
+      Requires=foundationdb.service epmd.service
+      [Service]
+      EnvironmentFile=/etc/frontier.env
+      WorkingDirectory=/opt/frontier
+      ExecStart=/opt/frontier/.lake/build/bin/frontier --port 9920 --dist-port 9930 --cookie-file /etc/frontier.cookie
+      Restart=on-failure
+      [Install]
+      WantedBy=multi-user.target
+runcmd:
+  - set -e
+  - cd /tmp && curl -sLO https://github.com/apple/foundationdb/releases/download/7.3.63/foundationdb-clients_7.3.63-1_amd64.deb && curl -sLO https://github.com/apple/foundationdb/releases/download/7.3.63/foundationdb-server_7.3.63-1_amd64.deb && dpkg -i foundationdb-clients_7.3.63-1_amd64.deb foundationdb-server_7.3.63-1_amd64.deb
+  - sed -i '/^\[fdbserver\]/a storage_memory = 512MiB' /etc/foundationdb/foundationdb.conf && systemctl restart foundationdb
+  - . /etc/frontier.env && git clone https://github.com/V-Sekai-fire/datasource-store /opt/datasource-store && cd /opt/datasource-store && git checkout -q "$STORE_VERSION" && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --target weftfdb -j1
+  - curl -sSfL https://github.com/leanprover/elan/releases/latest/download/elan-x86_64-unknown-linux-gnu.tar.gz | tar xz -C /tmp && /tmp/elan-init -y --default-toolchain none
+  - . /etc/frontier.env && git clone https://github.com/V-Sekai-fire/interactor-persona-frontier /opt/frontier && cd /opt/frontier && git checkout -q "$FRONTIER_REF" && PATH=/root/.elan/bin:$PATH lake build
+  - head -c 32 /dev/urandom | base64 | tr -d '/+=' > /etc/frontier.cookie && chmod 600 /etc/frontier.cookie
+  - systemctl daemon-reload && systemctl enable --now epmd frontier
