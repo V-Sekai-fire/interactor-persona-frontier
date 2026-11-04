@@ -72,7 +72,7 @@ Non-fork repositories whose name or description matches the character-pipeline k
 | 2026-10-24 | interactor-cyclegan-style-transfer | Python | 0 | Model image for cyclegan_style_transfer: ukiyo-e and Monet restyling of ANNY renders, BSD upstream, non-diffusion by design. |
 | 2026-10-24 | interactor-ufbx-to-openusd | Python | 0 | FBX in, OpenUSD out, through ufbx. Follows Godot's fbx_document.cpp option choices; conventions parsed, never assumed. |
 | 2026-10-24 | datasource-anny-render-corpus | Python | 0 | The ANNY render corpus pipeline: ETNF schema, identity sampling, the audits that gate a render run, and a Mitsuba render pass pinned by pixi |
-| 2026-10-24 | interactor-taskweft-nmm-personas | Elixir | 0 | IEC 60848 GRAFCET personas playing Neural MMO 2 over 2-contract/bus, with MaskScore traces. |
+75|| 2026-10-24 | interactor-taskweft-nmm-personas | Elixir | 0 | IEC 60848 GRAFCET personas playing Neural MMO 2 over 2-contract/bus, with MaskScore traces. GRAFCET personas retired; traces only. |
 | 2026-10-24 | datasource-anny-soma-corpus | Python | 0 | ANNY-SOMA keypoint corpus. Task #67 render side. First-subset row shape per RFD 2203. |
 | 2026-10-24 | entities-anny-creator | GDScript | 0 | A character creator with sliders over a parametric human |
 | 2026-10-24 | interactor-usd-guest | C++ | 0 | OpenUSD from bytes as a godot-sandbox guest: usd.elf and its Gate 0G probe |

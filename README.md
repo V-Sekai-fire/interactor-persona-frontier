@@ -4,7 +4,7 @@ The persona as an A2A webserver that learns its planning domain from experience:
 
 ## What it is for
 
-`interactor-taskweft-persona` answers from a planning domain instead of a neural network, and every capability it has is one somebody authored as an action. This server closes that gap the way the Bitter Lesson asks: the planner stays the fixed meta-method, and the domain's content (which stage requires which, how long each takes) is induced from experience reports and from frontier practice, landing only through a gate with a positive and a negative control. The domain is the ten-stage look-dev to character-persona pipeline; `docs/stack.md` grades the stages and `docs/repo-inventory.md` holds the repository survey.
+`interactor-taskweft-persona` answers from a planning domain instead of a neural network, and every capability it has is one somebody authored as an action. This server closes that gap the way the Bitter Lesson asks: the planner stays the fixed meta-method, and the domain's content (which stage requires which, how long each takes) is induced from experience reports and from frontier practice, landing only through a gate with a positive and a negative control. The IEC 60848 GRAFCET persona controllers of `interactor-taskweft-nmm-personas` are retired in favour of this loop; only their MaskScore traces survive, as experience. The domain is the ten-stage look-dev to character-persona pipeline; `docs/stack.md` grades the stages and `docs/repo-inventory.md` holds the repository survey.
 
 Three pieces:
 
