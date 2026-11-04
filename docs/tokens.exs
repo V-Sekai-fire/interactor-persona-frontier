@@ -24,8 +24,9 @@ defmodule Ledger do
 
   defmacro token(name, status, note \\ nil), do: quote(do: @rows({:token, unquote(name), unquote(status), unquote(note)}))
   # params: parameters in billions; weights: the shipped weight files in GB (as published); bits:
-  # average bits per parameter of that shipping (weights x 8 / params). The 2-bit column is computed:
-  # params / 4 GB, what the model would weigh packed like Bonsai 2's PQ2_0 (measured 2.14 bits/param).
+  # average bits per parameter of that shipping (weights x 8 / params, or measured when given).
+  # Two projections and no more: bf16 (params x 2 GB) is always reachable; 4-bit (params / 2 GB) is
+  # sometimes reachable and is marked so. A model already below bf16 keeps its shipped size in both.
   defmacro model(name, status, note, sizes \\ []), do: quote(do: @rows({:model, unquote(name), unquote(status), unquote(note), unquote(sizes)}))
   defmacro subject(name, opts), do: quote(do: @rows({:subject, unquote(name), unquote(opts[:stages])}))
   defmacro stage(n, name, opts), do: quote(do: @rows({:stage, unquote(n), unquote(name), unquote(opts[:requires] || []), unquote(opts[:draws_on] || [])}))
@@ -174,7 +175,9 @@ subjects = for {:subject, s, ss} <- rows, do: {s, ss}
 
 IO.puts("# tokens")
 for {:token, n, status, note} <- rows, do: IO.puts("token:#{n}  #{status}  #{note || ""}")
-IO.puts("\n# models  (params B · shipped GB · avg bits/param · at 2 bits GB, Bonsai 2 PQ2_0 style)")
+bf16 = fn sz -> p = sz[:params]; w = sz[:weights]; if p && w, do: min(w, p * 2.0), else: nil end
+q4 = fn sz -> p = sz[:params]; w = sz[:weights]; if p && w, do: min(w, p / 2.0), else: nil end
+IO.puts("\n# models  (params B · shipped GB · avg bits/param · at bf16 GB · at 4-bit GB, where reachable)")
 fmt = fn
   nil -> "   ?  "
   x when is_float(x) -> :io_lib.format("~6.2f", [x]) |> to_string()
@@ -183,25 +186,24 @@ end
 for {:model, n, status, note, sz} <- rows do
   p = sz[:params]; w = sz[:weights]
   bits = sz[:bits] || (if p && w && p > 0, do: w * 8 / p, else: nil)
-  two = if p, do: p / 4, else: nil
-  IO.puts("model:#{n}  #{status}  params #{fmt.(p)} B · shipped #{fmt.(w)} GB · #{fmt.(bits)} bits/param · 2-bit #{fmt.(two)} GB")
+  IO.puts("model:#{n}  #{status}  params #{fmt.(p)} B · shipped #{fmt.(w)} GB · #{fmt.(bits)} bits/param · bf16 #{fmt.(bf16.(sz))} GB · 4-bit #{fmt.(q4.(sz))} GB")
   IO.puts("    #{note}" <> if(sz[:source], do: "\n    sizes: #{sz[:source]}", else: ""))
 end
-# ---- what serving costs: the models a running cell must hold, as shipped and at 2 bits
+# ---- what serving costs: the models a running pipeline must hold, as shipped
 served = for {:model, n, st, _, sz} <- rows, st in [:innovation, :boring, :paid], sz[:weights] != nil, do: {n, sz}
 tools = [:bonsai_2_27b_heretic_v2, :claude, :editscore_7b]          # scorer, agent, judge: run beside the pipeline, not in a player's path
 {pipeline, beside} = Enum.split_with(served, fn {n, _} -> n not in tools end)
 sum = fn xs, k -> xs |> Enum.map(fn {_, sz} -> sz[k] || 0 end) |> Enum.sum() end
-two = fn xs -> xs |> Enum.map(fn {_, sz} -> (sz[:params] || 0) / 4 end) |> Enum.sum() end
+sumf = fn xs, f -> xs |> Enum.map(fn {_, sz} -> f.(sz) || 0 end) |> Enum.sum() end
 unmeasured = for {:model, n, st, _, sz} <- rows, st in [:innovation, :boring, :paid], sz[:weights] == nil, n != :claude, do: n
 IO.puts("\n# total size to serve (GB)")
-IO.puts("pipeline (stages 1-10, a player's path): shipped #{fmt.(sum.(pipeline, :weights))} GB · at 2 bits #{fmt.(two.(pipeline))} GB · #{length(pipeline)} models")
-IO.puts("beside it (judge, scorer):               shipped #{fmt.(sum.(beside, :weights))} GB · at 2 bits #{fmt.(two.(beside))} GB")
-IO.puts("everything measured:                     shipped #{fmt.(sum.(served, :weights))} GB · at 2 bits #{fmt.(two.(served))} GB")
+IO.puts("pipeline (stages 1-10, a player's path): shipped #{fmt.(sum.(pipeline, :weights))} GB · bf16 #{fmt.(sumf.(pipeline, bf16))} GB · 4-bit #{fmt.(sumf.(pipeline, q4))} GB · #{length(pipeline)} models")
+IO.puts("beside it (judge, scorer):               shipped #{fmt.(sum.(beside, :weights))} GB · bf16 #{fmt.(sumf.(beside, bf16))} GB · 4-bit #{fmt.(sumf.(beside, q4))} GB")
+IO.puts("everything measured:                     shipped #{fmt.(sum.(served, :weights))} GB · bf16 #{fmt.(sumf.(served, bf16))} GB · 4-bit #{fmt.(sumf.(served, q4))} GB")
 IO.puts("not in the sum (unmeasured):             #{Enum.join(unmeasured, ", ")}")
 IO.puts("the box: s-1vcpu-2gb has 50 GB SSD and 2 GB RAM, so no model in the pipeline runs on the cell; the cell serves plans, the models run where their GPU is")
 
-# ---- residency on one RTX 4090 (24 GB): what stays, what rotates, as shipped and at 2 bits
+# ---- residency on one RTX 4090 (24 GB): what stays, what rotates; shipped, at bf16 (always), at 4-bit (sometimes)
 # Rule: the scorer and the planner stay resident; every stage model loads for its stage and
 # unloads after (rotating residency). The budget per rotation is the largest stage, not the sum.
 vram = 24.0
@@ -209,17 +211,17 @@ resident = [:bonsai_2_27b_heretic_v2]
 stage_of = %{omnigen2_editscore7b_v1_1: 1, trellis2: 2, pixal3d: 2, skintokens_tokenrig: 4, p3_sam: 5, kimodo_motionbricks: 7, zipformer_sherpa_onnx: 8, silero_vad: 8, editscore_7b: 1}
 by_stage = served |> Enum.reject(fn {n, _} -> n in resident or stage_of[n] == nil end) |> Enum.group_by(fn {n, _} -> stage_of[n] end)
 res_shipped = sum.(Enum.filter(served, fn {n, _} -> n in resident end), :weights)
-res_two = two.(Enum.filter(served, fn {n, _} -> n in resident end))
 IO.puts("\n# rotating residency on one 4090 (#{vram} GB)")
-IO.puts("resident: #{Enum.join(resident, ", ")}  shipped #{fmt.(res_shipped)} GB · 2-bit #{fmt.(res_two)} GB  (plus the planner, no weights)")
+IO.puts("resident: #{Enum.join(resident, ", ")}  shipped #{fmt.(res_shipped)} GB  (plus the planner, no weights)")
 for {st, ms} <- Enum.sort(by_stage) do
-  sh_ = sum.(ms, :weights); tw = two.(ms)
-  fits_sh = sh_ + res_shipped + 2.0 <= vram; fits_tw = tw + res_two + 2.0 <= vram
-  IO.puts("stage #{st}: #{Enum.map_join(ms, ", ", &elem(&1, 0))}  shipped #{fmt.(sh_)} GB #{if fits_sh, do: "fits", else: "DOES NOT FIT"} · 2-bit #{fmt.(tw)} GB #{if fits_tw, do: "fits", else: "DOES NOT FIT"}")
+  fit = fn x -> if x + res_shipped + 2.0 <= vram, do: "fits", else: "DOES NOT FIT" end
+  sh_ = sum.(ms, :weights); b = sumf.(ms, bf16); q = sumf.(ms, q4)
+  IO.puts("stage #{st}: #{Enum.map_join(ms, ", ", &elem(&1, 0))}  shipped #{fmt.(sh_)} GB #{fit.(sh_)} · bf16 #{fmt.(b)} GB #{fit.(b)} · 4-bit #{fmt.(q)} GB #{fit.(q)}")
 end
 peak_sh = by_stage |> Enum.map(fn {_, ms} -> sum.(ms, :weights) end) |> Enum.max()
-peak_tw = by_stage |> Enum.map(fn {_, ms} -> two.(ms) end) |> Enum.max()
-IO.puts("peak rotation + resident + 2 GB activations: shipped #{fmt.(peak_sh + res_shipped + 2)} GB · 2-bit #{fmt.(peak_tw + res_two + 2)} GB  against #{vram} GB")
+peak_b = by_stage |> Enum.map(fn {_, ms} -> sumf.(ms, bf16) end) |> Enum.max()
+peak_q = by_stage |> Enum.map(fn {_, ms} -> sumf.(ms, q4) end) |> Enum.max()
+IO.puts("peak rotation + resident + 2 GB activations: shipped #{fmt.(peak_sh + res_shipped + 2)} GB · bf16 #{fmt.(peak_b + res_shipped + 2)} GB · 4-bit #{fmt.(peak_q + res_shipped + 2)} GB  against #{vram} GB")
 
 IO.puts("\n# tuples")
 missing =
