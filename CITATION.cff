@@ -1,0 +1,48 @@
+cff-version: 1.2.0
+title: interactor-persona-frontier
+message: If you use this software, please cite it as below.
+type: software
+license: MIT
+authors:
+  - family-names: Lee
+    given-names: K. S. Ernest (iFire)
+    orcid: https://orcid.org/0000-0001-7772-8085
+repository-code: https://github.com/V-Sekai-fire/interactor-persona-frontier
+abstract: >-
+  The persona as an A2A webserver that learns its planning domain from
+  experience. The planner (interactor-taskweft-persona, RECTGTN) is the fixed
+  meta-method; the domain's content, which pipeline stage requires which and
+  how long each takes, is induced from experience reports and frontier
+  practice and lands only through a gate with a positive and a negative
+  control. The domain is the look-dev pipeline for characters, props and
+  worlds, all GPU-skinned, in their own stage subsets.
+references:
+  - type: software
+    title: interactor-taskweft-persona
+    authors:
+      - family-names: Lee
+        given-names: K. S. Ernest (iFire)
+    repository-code: https://github.com/V-Sekai-fire/interactor-taskweft-persona
+    license: MIT
+  - type: conference-paper
+    title: Large Scale GPU-Based Skinning for Vegetation in 'Alan Wake 2'
+    authors:
+      - family-names: Kandar
+        given-names: Kiyavash
+    conference:
+      name: Game Developers Conference
+    year: 2024
+    url: https://gdcvault.com/play/1034310/Large-Scale-GPU-Based-Skinning
+    notes: >-
+      GPU-based skinning and a compute-shader animation system for skeleton
+      rigs at runtime, for dense vegetation geometry, with full representation
+      in ray tracing. The reason props and worlds share the character
+      pipeline's skin and motion stages here.
+  - type: generic
+    title: The Bitter Lesson
+    authors:
+      - family-names: Sutton
+        given-names: Richard S.
+    year: 2019
+    url: http://www.incompleteideas.net/IncIdeas/BitterLesson.html
+    notes: The grading rule for every stage in docs/stack.md.
