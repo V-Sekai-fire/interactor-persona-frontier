@@ -117,7 +117,7 @@ definition node {                          # the frontier process
 | token:interactor-trellis2-image-to-textured-mesh | innovation (model image) | subject:world, subject:prop, subject:character |
 | token:interactor-usd-guest | Token 1 (guest) | subject:world, subject:prop, subject:character |
 | token:interactor-voice | Token 1 (guest) | subject:character |
-| token:mesh-segmentation-REPLACEMENT-WANTED | **REPLACE ASAP**: interactor-p3sam-mesh-segmentation is withdrawn (Tencent licence review pending); no owner yet, so every garment plan acquires a token nobody holds | subject:character |
+| token:interactor-p3sam-mesh-segmentation | innovation (model image; licence review pending) | subject:character |
 | token:sherpa-onnx-zipformer | boring (streaming Zipformer transducer on CPU via sherpa-onnx; replaces mfcc-viseme-gan) | subject:character |
 | token:silero-vad | boring (speech gate ahead of the recognizer) | subject:character |
 | token:omnigen2-editscore7b-v1.1 | innovation (image model, HF weights; replaces interactor-see-through-ggml) | subject:world, subject:prop, subject:character |
@@ -146,7 +146,7 @@ Every model is a token too: weights are a substrate whose licence, size and host
 | TRELLIS2, Pixal3D | image → textured mesh (PBR) | stage 2 model images; Pixal3D as a ggml-rd guest (RFD 2336) | innovation |
 | DINOv3, BiRefNet HR | encoder, matting | inside the Pixal3D guest (RFD 2336) | already paid with Pixal3D |
 | SkinTokens (TokenRig) | auto-rig | stage 4 model image; logbook: first forward pass | innovation |
-| P3-SAM | mesh segmentation | stage 5; **withdrawn, licence review pending; replacement wanted** | retiring |
+| P3-SAM | mesh segmentation | stage 5 model image; Tencent licence review pending (replacement rescinded 2026-11-04) | innovation |
 | Kimodo, MotionBricks | text → motion, motion on ggml-rd | stage 7 model images and guest | innovation |
 | Zipformer (streaming transducer, sherpa-onnx) | speech → phoneme posteriors, CPU, ~5–10 ms per 160 ms chunk | stage 8 (operator, 2026-11-04): replaces mfcc-viseme-gan; phonemes map to the viseme set, EMA α≈0.65 over a 2-frame lookahead, 150–210 ms end to end | boring: ONNX on CPU, off the GPU the renderer holds |
 | Silero VAD | speech gate | stage 8, ahead of Zipformer so ambient noise never twitches the mouth | boring |

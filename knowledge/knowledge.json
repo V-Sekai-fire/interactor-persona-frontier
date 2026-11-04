@@ -84,7 +84,7 @@
   },
   "5": {
    "tokens": [
-    "mesh-segmentation-REPLACEMENT-WANTED",
+    "interactor-p3sam-mesh-segmentation",
     "interactor-remesh",
     "interactor-garment-fit",
     "interactor-cloth-fit-guest",
