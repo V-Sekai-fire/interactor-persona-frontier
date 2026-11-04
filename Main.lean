@@ -11,7 +11,7 @@ Users Can a $12 Server Handle?"): 1 vCPU, 2 GB, everything on the machine, k6 vi
 p95 passes 500 ms, p99 passes 1 s or more than 1 % of requests fail.
 
     elixir build.exs                                              one command: deps, lake build, witness, PropCheck
-    frontier --port 9920 --dist-port 9930 --cookie <cookie>      (or --cookie-file <path>; --host 0.0.0.0 in a container)
+    frontier --port 9920 --dist-port 9930 --cookie <cookie>      (or --cookie-file <path>; --host 0.0.0.0 in a container, --node-host <addr peers dial>)
 
 The box is DigitalOcean's `s-1vcpu-2gb` Basic Droplet ($12.00/mo, $0.01786/hr): `deploy/cloud-init.yaml`
 builds it, `deploy/k6.js` loads it with the challenge's thresholds.
@@ -119,7 +119,9 @@ def main (args : List String) : IO UInt32 := do
   IO.println s!"frontier on {url} (HTTP/1.1), db {← Db.url}"
   (← IO.getStdout).flush
   let answer (t : String) : IO String := do return (← command t).compress
-  let _ ← IO.asTask (Async.block (Dist.run answer { host, ip, port := distPort.toUInt16, cookie }))
+  -- the node's name carries the address a peer dials, which is not the bind address in a container
+  let nodeHost := (option args "--node-host").getD (if host == "0.0.0.0" then "127.0.0.1" else host)
+  let _ ← IO.asTask (Async.block (Dist.run answer { host := nodeHost, ip, port := distPort.toUInt16, cookie }))
   Async.block do
     let server ← Server.serve (.v4 ⟨ip, port.toUInt16⟩) (handler url) { maxBodySize := 1048576 }
     server.waitShutdown

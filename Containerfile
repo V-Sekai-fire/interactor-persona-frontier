@@ -4,8 +4,13 @@
 # 9920 and the Erlang node on 9930. Pages go to the cluster named by WEFT_FDB_CLUSTER_FILE when
 # FRONTIER_DB is file:frontier?vfs=weft_fdb; without those, the store is a SQLite file at /data.
 #
+# AlmaLinux 10 and EPEL 10 carry no Erlang, so epmd runs beside the node in one pod, from the
+# stock Erlang image; the two share localhost.
+#
 #   podman build -t frontier .
-#   podman run --rm -p 9920:9920 -p 9930:9930 -p 4369:4369 -v frontier-data:/data \
+#   podman pod create --name frontier -p 9920:9920 -p 9930:9930 -p 4369:4369
+#   podman run -d --pod frontier --name epmd docker.io/library/erlang:27-alpine epmd -d
+#   podman run -d --pod frontier --name node -v frontier-data:/data \
 #     -v /etc/foundationdb/fdb.cluster:/etc/foundationdb/fdb.cluster:ro \
 #     -e FRONTIER_DB=file:frontier?vfs=weft_fdb -e WEFT_FDB_CLUSTER_FILE=/etc/foundationdb/fdb.cluster frontier
 ARG FDB=7.3.63
@@ -28,9 +33,9 @@ RUN lake build -Kfdb=/usr/lib64/libfdb_c.so && ./.lake/build/bin/frontier_witnes
 
 FROM almalinux:10
 ARG FDB
-RUN dnf -y install erlang-erts erlang-kernel erlang-stdlib curl-minimal && dnf clean all \
+RUN dnf -y install curl-minimal pkgconf-pkg-config && dnf clean all \
  && curl -sLo /tmp/fdb-clients.rpm https://github.com/apple/foundationdb/releases/download/${FDB}/foundationdb-clients-${FDB}-1.el9.$(uname -m).rpm \
- && rpm -i /tmp/fdb-clients.rpm && rm /tmp/fdb-clients.rpm && dnf -y remove curl-minimal && dnf clean all
+ && rpm -i /tmp/fdb-clients.rpm && rm /tmp/fdb-clients.rpm
 WORKDIR /app
 COPY --from=build /src/.lake/build/bin/frontier /app/frontier
 COPY knowledge ./knowledge
@@ -39,5 +44,5 @@ COPY plans ./plans
 RUN mkdir -p /data && useradd -r -d /app frontier && chown -R frontier /app /data
 USER frontier
 ENV FRONTIER_DB=/data/frontier.sqlite
-EXPOSE 9920 9930 4369
-CMD ["sh", "-c", "[ -n \"$FRONTIER_COOKIE\" ] || [ -f /data/cookie ] || head -c 24 /dev/urandom | base64 > /data/cookie; epmd -daemon && exec /app/frontier --host 0.0.0.0 --port 9920 --dist-port 9930 ${FRONTIER_COOKIE:+--cookie $FRONTIER_COOKIE} ${FRONTIER_COOKIE:---cookie-file /data/cookie}"]
+EXPOSE 9920 9930
+CMD ["sh", "-c", "[ -n \"$FRONTIER_COOKIE\" ] || [ -f /data/cookie ] || head -c 24 /dev/urandom | base64 > /data/cookie; exec /app/frontier --host 0.0.0.0 --port 9920 --dist-port 9930 ${FRONTIER_COOKIE:+--cookie $FRONTIER_COOKIE} ${FRONTIER_COOKIE:---cookie-file /data/cookie}"]
