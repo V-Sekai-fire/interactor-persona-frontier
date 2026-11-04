@@ -1,4 +1,4 @@
-# Repository inventory
+# Repository survey (raw)
 
 Non-fork repositories whose name or description matches the character-pipeline keyword set, per owner, newest push first. Counts are the full public listing on the day of the survey. `A` marks an archived repository.
 
