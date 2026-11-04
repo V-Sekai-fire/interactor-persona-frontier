@@ -43,6 +43,17 @@
 #
 # Practice uses the domain as its own simulator, so on its own it measures reachability and plan length, not truth about the pipeline; truth enters only through `/experience` from a real stage run (a CI job of the owning repository is the intended reporter). No action is ever invented: a report that names an action the domain lacks is refused. Traces are JSON lines under `traces/`, not parquet, and the server holds no task state.
 
+# ## Build and run
+#
+#     git clone https://github.com/V-Sekai-fire/interactor-taskweft-persona ../persona
+#     (cd ../persona && lake build persona_plan)
+#     elixir tools/gen_domain.exs
+#     elixir server.exs --port 9920
+#
+#     curl -s -X POST localhost:9920/ -d '{"jsonrpc":"2.0","id":1,"method":"message/send","params":{"message":{"role":"user","parts":[{"text":"world"}]}}}'
+#     curl -s -X POST localhost:9920/experience -d '{"action":"settle-world-7","held_before":["world-1","world-2","world-4","world-6"],"settled":true,"duration":"PT2H"}'
+#     curl -s -X POST localhost:9920/learn
+
 Process.put(:gen_domain_lib, true)
 Code.require_file("tools/gen_domain.exs", __DIR__)
 
