@@ -84,7 +84,7 @@
   },
   "5": {
    "tokens": [
-    "interactor-p3sam-mesh-segmentation",
+    "point-sam",
     "interactor-remesh",
     "interactor-garment-fit",
     "interactor-cloth-fit-guest",

@@ -66,7 +66,8 @@ defmodule Frontier.Tokens do
     model :trellis2, :innovation, "image to textured mesh, stage 2", params: 4.0, weights: 8.1, source: "microsoft/TRELLIS.2-4B: 1.3B img2shape + 1.3B imgshape2tex DiTs at one resolution plus encoders, bf16; repo 16.24 GB with both 512 and 1024 variants"
     model :pixal3d, :innovation, "image to PBR mesh as a ggml-rd guest (RFD 2336); DINOv3 and BiRefNet HR paid with it", params: 0.55, weights: 1.65, source: "DINOv3 ViT-L 0.3B 1.21 GB fp32 + BiRefNet HR 0.22B 0.44 GB; Pixal3D head not published"
     model :skintokens_tokenrig, :innovation, "auto-rig, stage 4; first forward pass logged", params: 0.62, weights: 1.25, source: "chibifire/SkinTokens-GGUF-BF16: tokenrig.gguf 0.95 + skin-vae.gguf 0.24 + mesh-encoder.gguf 0.06 GB, bf16"
-    model :p3_sam, :innovation, "mesh segmentation, stage 5; Tencent licence review pending (replacement rescinded 2026-11-04)", params: 0.11, weights: 0.45, source: "tencent/Hunyuan3D-Part p3sam.safetensors 0.45 GB (fp32)"
+    model :point_sam, :innovation, "promptable point-cloud segmentation, ViT-L encoder (SAM, Uni3D lineage), stage 5; replaces P3-SAM (operator, 2026-11-04); no ggml port yet", params: 0.311, weights: 1.24, source: "yuchen0187/Point-SAM model.safetensors 1.24 GB, 311 M params, fp32"
+    model :p3_sam, :retired, "mesh segmentation (Tencent Hunyuan3D-Part, Sonata backbone); replaced by Point-SAM over the licence", params: 0.11, weights: 0.45, source: "tencent/Hunyuan3D-Part p3sam.safetensors 0.45 GB (fp32)"
     model :kimodo_motionbricks, :innovation, "text to motion and motion on ggml-rd, stage 7", params: 8.65, weights: 17.04, source: "chibifire/Llama-3-Kimodo-GGML 15.18 GB (Llama-3-8B base, bf16, split per layer) + Kimodo-SOMA-RP-v1.1 0.283 B 1.13 GB + MotionBricks-G1-GGML 0.73 GB (pose 0.55, root 0.14, vq-decoder 0.05)"
     model :zipformer_sherpa_onnx, :boring, "Zipformer (Icefall/k2, trained with augmentation: SpecAugment and speed perturbation) exported to ONNX and run as a streaming transducer on CPU via sherpa-onnx, 5-10 ms per 160 ms chunk; phonemes to visemes, 2-frame EMA, 150-210 ms end to end; stage 8", params: 0.066, weights: 0.26, source: "streaming-zipformer-en-2023-06-26 encoder fp32 0.26 GB, int8 0.07 GB"
     model :silero_vad, :boring, "speech gate ahead of Zipformer", params: 0.0018, weights: 0.002, source: "onnx-community/silero-vad model.onnx"
@@ -117,7 +118,7 @@ defmodule Frontier.Tokens do
     stage 2, :"image-to-3d", requires: ["1"], draws_on: [:interactor_trellis2_image_to_textured_mesh, :contract_orbit_views]
     stage 3, :"body", requires: ["2"], draws_on: [:interactor_anny_fit, :interactor_headfit, :contract_anny_kernels]
     stage 4, :"gpu-skin", requires: ["3"], draws_on: [:interactor_skintokens_auto_rig, :interactor_skintokens_guest, :interactor_cage, :contract_ggml_rd]
-    stage 5, :"garments", requires: ["4"], draws_on: [:interactor_p3sam_mesh_segmentation, :interactor_remesh, :interactor_garment_fit, :interactor_cloth_fit_guest, :interactor_drape, :interactor_bake]
+    stage 5, :"garments", requires: ["4"], draws_on: [:point_sam, :interactor_remesh, :interactor_garment_fit, :interactor_cloth_fit_guest, :interactor_drape, :interactor_bake]
     stage 6, :"look-render", requires: ["2", "5"], draws_on: [:interactor_slughorn, :thorvg]
     stage 7, :"gpu-motion", requires: ["4"], draws_on: [:interactor_kimodo_text_to_motion, :interactor_motion_retarget, :interactor_motion_matching_guest]
     stage 8, :"face-voice", requires: ["3", "4"], draws_on: [:interactor_headfit, :sherpa_onnx_zipformer, :interactor_voice, :silero_vad]
@@ -142,7 +143,7 @@ defmodule Frontier.Tokens do
     token :interactor_motion_matching_guest, :token_1, "guest"
     token :interactor_motion_retarget, :paid, "Lean"
     token :interactor_omnigen2_editscore_space, :boring, "static Space"
-    token :interactor_p3sam_mesh_segmentation, :innovation, "model image; licence review pending"
+    token :point_sam, :innovation, "zyc00/Point-SAM (ICLR 2025, MIT): promptable 3D segmentation on point clouds, mesh labels by sampling and propagation; replaces interactor-p3sam-mesh-segmentation (Tencent licence)"
     token :interactor_remesh, :token_1, "guest"
     token :interactor_skintokens_auto_rig, :innovation, "model image"
     token :interactor_skintokens_guest, :token_1, "guest"
@@ -209,7 +210,7 @@ IO.puts("the box: s-1vcpu-2gb has 50 GB SSD and 2 GB RAM, so no model in the pip
 # unloads after (rotating residency). The budget per rotation is the largest stage, not the sum.
 vram = 24.0
 resident = [:bonsai_2_27b_heretic_v2]
-stage_of = %{omnigen2_editscore7b_v1_1: 1, trellis2: 2, pixal3d: 2, skintokens_tokenrig: 4, p3_sam: 5, kimodo_motionbricks: 7, zipformer_sherpa_onnx: 8, silero_vad: 8, editscore_7b: 1}
+stage_of = %{omnigen2_editscore7b_v1_1: 1, trellis2: 2, pixal3d: 2, skintokens_tokenrig: 4, point_sam: 5, kimodo_motionbricks: 7, zipformer_sherpa_onnx: 8, silero_vad: 8, editscore_7b: 1}
 by_stage = served |> Enum.reject(fn {n, _} -> n in resident or stage_of[n] == nil end) |> Enum.group_by(fn {n, _} -> stage_of[n] end)
 res_shipped = sum.(Enum.filter(served, fn {n, _} -> n in resident end), :weights)
 IO.puts("\n# rotating residency on one 4090 (#{vram} GB)")
