@@ -67,6 +67,7 @@ scale quantises (23.99 recurs: 25, 24, 23 is the model's "good edit" vowel). The
 extract and ps_human, where the two edits are close and a 0-25 rubric cannot separate them; the
 pairwise form sees both at once and can.
 
-Verdict: use Bonsai 2 in EditScore's shape where a caller needs a per-image score (ladders, the
-0-25 axis in the MaskScore reports), and the pairwise form where the question is a choice. Both
-run on the resident model; EditScore-7B is not needed for either.
+Rule (operator, 2026-11-04): when the input carries a pair, the judge asks the pair (`judge.py`,
+one letter); the EditScore shape (`score.py`) is for a lone `(source, edited, instruction)` only.
+The two are the existing shapes; no third form. Both run on the resident model; EditScore-7B is
+not needed for either.
