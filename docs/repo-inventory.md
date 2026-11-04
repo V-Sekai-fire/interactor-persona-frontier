@@ -1,5 +1,7 @@
 # Repository survey (raw)
 
+Model weights are not repositories here: the stage 1 image model is [OmniGen2/OmniGen2-EditScore7B-v1.1](https://huggingface.co/OmniGen2/OmniGen2-EditScore7B-v1.1) on Hugging Face (operator, 2026-11-04).
+
 Non-fork repositories whose name or description matches the character-pipeline keyword set, per owner, newest push first. Counts are the full public listing on the day of the survey. `A` marks an archived repository.
 
 ## V-Sekai-fire (23 of 81 public repositories)

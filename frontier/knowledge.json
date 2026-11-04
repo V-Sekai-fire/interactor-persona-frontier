@@ -7,8 +7,9 @@
    "name": "look-dev",
    "requires": [],
    "tokens": [
+    "omnigen2-editscore7b-v1.1",
     "interactor-see-through-ggml",
-    "interactor-cyclegan-style-transfer"
+    "interactor-omnigen2-editscore-space"
    ]
   },
   "10": {

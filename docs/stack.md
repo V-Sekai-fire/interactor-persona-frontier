@@ -8,7 +8,7 @@ Evidence base: repository names and descriptions of V-Sekai-fire (81), chibifire
 
 ```
 concept image / text
-  │ 1 look dev          see-through-ggml · cyclegan-style-transfer · EditScore/MaskScore ladder
+  │ 1 look dev          OmniGen2-EditScore7B-v1.1 (image model) · see-through-ggml (cel layers) · EditScore/MaskScore ladder (judge)
   ▼
 textured mesh (PBR)
   │ 2 image→3D          trellis2 / pixal3d image-to-textured-mesh · voxhammer edit · contract-orbit-views
@@ -44,7 +44,7 @@ Interchange between stages: OpenUSD (`.usda`, UsdSkel sublayer from skintokens-a
 
 | # | Stage | Scales by | Human knowledge shipping today | Retire when |
 |---|---|---|---|---|
-| 1 | Look dev | Learning (image model) + search (best-of-N under EditScore/MaskScore learned judge) | Prompt templates, style-transfer pairs, layer-decomposition network for anime cels | A general image-edit model scores above the ladder's top rank on held-out pairs |
+| 1 | Look dev | Learning (OmniGen2-EditScore7B-v1.1: one 7B model for generation and instruction edits, its EditScore reward head the learned judge) + search (best-of-N under that judge) | Prompt templates; see-through-ggml's layer-decomposition network for anime cels; style-transfer pairs retired | A single model scores above the ladder's top rank on held-out edit pairs with no prompt template |
 | 2 | Image→3D | Learning (TRELLIS2, Pixal3D) + search (orbit-view consistency across `sphere_hammersley_sequence` cameras) | Fixed PBR channel set; voxhammer edit prompts | Model emits UsdSkel-ready topology without stage 3 |
 | 3 | Body fit | Search (in-guest L-BFGS over ANNY sliders; Lean-emitted forward/backward kernels) | ANNY parametric body itself: a hand-built prior with ~100 sliders | A learned body model fitted on `datasource-anny-render-corpus` beats ANNY on keypoint reprojection |
 | 4 | Rig/skin | Learning (SkinTokens auto-rig) | Humanoid bone naming; biharmonic cage bind; Delta Mush (DQS blocklisted) | SkinTokens weights pass the range-of-motion test bank with no cage |
@@ -57,7 +57,7 @@ Interchange between stages: OpenUSD (`.usda`, UsdSkel sublayer from skintokens-a
 
 ## Where the stack is bitter-lesson-pilled and where it is not
 
-Pilled. Stages 1, 2, 4, 7 and 8 are learned models, and the stack already pairs them with inference-time search: a learned scorer picks among samples (stage 1), orbit views vote (stage 2), motion matching searches a clip set (stage 7). Stage 3's L-BFGS fit and stage 5's physics solvers are search over a model; their performance grows with GPU time, which is why `cloth-fit-guest` has no CPU path. Stage 10 exists to keep the compute axis open: guest ELFs run the same kernel on three GPU APIs.
+Pilled. Stages 1, 2, 4, 7 and 8 are learned models, and the stack already pairs them with inference-time search: OmniGen2-EditScore7B-v1.1 both generates and judges, so best-of-N under its own EditScore head picks among samples (stage 1), orbit views vote (stage 2), motion matching searches a clip set (stage 7). Stage 3's L-BFGS fit and stage 5's physics solvers are search over a model; their performance grows with GPU time, which is why `cloth-fit-guest` has no CPU path. Stage 10 exists to keep the compute axis open: guest ELFs run the same kernel on three GPU APIs.
 
 Not pilled, by choice. ANNY (stage 3) and the planning domains (stage 9) are hand-encoded content. Stage 6 is on the compute path: `interactor-slughorn` renders SVG and ThorVG vector content with Slug's exact per-fragment curve evaluation, so the look is data and one general shader replaces the hand-ported toon and MaterialX shaders. ANNY is the defensible case, Brooks's objection in practice: a low-parameter body prior makes the fit data-cheap, the same way convolution made vision cheap, and the render corpus exists to replace it. The remaining MToon map and MaterialX port are ports, not methods, and retire with the vector path. The persona domain is the exposed position: a planner is a general method, but a domain written by hand plateaus exactly where Sutton says it does. Silver and Sutton's "era of experience" reading points at the fix the stack already half-holds: `interactor-taskweft-nmm-personas` records MaskScore traces of play, so the domain can be learned from those traces while the planner stays. Its IEC 60848 GRAFCET persona controllers are retired: a sequential function chart is authored content with no scaling axis (a fixed step/transition graph plateaus the moment the game changes), and the frontier loop in this repository replaces it, keeping only the traces as experience.
 
