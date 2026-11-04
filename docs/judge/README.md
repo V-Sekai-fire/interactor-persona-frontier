@@ -41,3 +41,32 @@ pairs is a probe, not a shipping number; the shipping gate is the full bench.
 Verdict: zero-shot Bonsai 2 is a usable stage-1 judge at 0.93 on this sample, so the training on
 `hf:chibifire` starts from above the baseline rather than below it, and EditScore-7B's
 `:retiring` row stands.
+
+## Addendum, same day: Bonsai 2 in EditScore's shape
+
+Question: can Bonsai 2 return EditScore's output, `{PF, SC, PQ, overall}` on 0-25 for one
+`(source, edited, instruction)`, so callers written against EditScore keep working?
+
+Apparatus: `score.py`, same 48 pairs and server. One edit per call, a three-axis rubric, JSON out
+at temperature 0, 40 max tokens; `overall` is the geometric mean of the three axes scaled to 25,
+so a zero on any axis zeroes it, as in EditScore. Both edits of each pair are scored separately and
+the human-preferred edit must come out higher (`score_results.jsonl`).
+
+| measure | value |
+| --- | --- |
+| preferred edit scores higher | 35 / 48 pairs; 8 ties; 5 losses |
+| win rate, ties excluded | **0.875** (35 / 40) |
+| per task (wins / 8) | motion_change 8, text_change 8, material_alter 6, tone_transfer 5, extract 4, ps_human 4 |
+| parse failures | 0 / 96 |
+| control: source scored as its own edit (n = 8) | PF 3.1, SC 25.0, overall 3.1 (EditScore's smoke test wants PF near 0: pass) |
+
+Reading: the absolute shape works (zero parse failures, the source control behaves, SC saturates
+at 25 for an unchanged image as it should), but ranking by independent scores is weaker than the
+pairwise question: 0.875 excluding ties against 0.927 pairwise, and 8 of 48 pairs tie because the
+scale quantises (23.99 recurs: 25, 24, 23 is the model's "good edit" vowel). The failures cluster in
+extract and ps_human, where the two edits are close and a 0-25 rubric cannot separate them; the
+pairwise form sees both at once and can.
+
+Verdict: use Bonsai 2 in EditScore's shape where a caller needs a per-image score (ladders, the
+0-25 axis in the MaskScore reports), and the pairwise form where the question is a choice. Both
+run on the resident model; EditScore-7B is not needed for either.
