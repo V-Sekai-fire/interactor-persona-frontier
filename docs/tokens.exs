@@ -23,7 +23,10 @@ defmodule Ledger do
   end
 
   defmacro token(name, status, note \\ nil), do: quote(do: @rows({:token, unquote(name), unquote(status), unquote(note)}))
-  defmacro model(name, status, note \\ nil), do: quote(do: @rows({:model, unquote(name), unquote(status), unquote(note)}))
+  # params: parameters in billions; weights: the shipped weight files in GB (as published); bits:
+  # average bits per parameter of that shipping (weights x 8 / params). The 2-bit column is computed:
+  # params / 4 GB, what the model would weigh packed like Bonsai 2's PQ2_0 (measured 2.14 bits/param).
+  defmacro model(name, status, note, sizes \\ []), do: quote(do: @rows({:model, unquote(name), unquote(status), unquote(note), unquote(sizes)}))
   defmacro subject(name, opts), do: quote(do: @rows({:subject, unquote(name), unquote(opts[:stages])}))
   defmacro stage(n, name, opts), do: quote(do: @rows({:stage, unquote(n), unquote(name), unquote(opts[:requires] || []), unquote(opts[:draws_on] || [])}))
   defmacro definition(name, do: block), do: quote(do: @rows({:definition, unquote(name), unquote(Macro.escape(block))}))
@@ -56,24 +59,24 @@ defmodule Frontier.Tokens do
 
 
     # ---- language models and model images, as tokens
-    model :omnigen2_editscore7b_v1_1, :innovation, "image generation + edit with the EditScore head; stage 1 model and judge (2026-11-04)"
-    model :editscore_7b, :boring, "pairwise image-edit judge; the MaskScore/EditScore ladders; a gate"
-    model :llada_o, :retired, "diffusion LM image edit; beat OmniGen2 on one pair at 14x wall, n=1; retired 2026-11-04, OmniGen2-EditScore7B-v1.1 is the image model"
-    model :trellis2, :innovation, "image to textured mesh, stage 2"
-    model :pixal3d, :innovation, "image to PBR mesh as a ggml-rd guest (RFD 2336); DINOv3 and BiRefNet HR paid with it"
-    model :skintokens_tokenrig, :innovation, "auto-rig, stage 4; first forward pass logged"
-    model :p3_sam, :innovation, "mesh segmentation, stage 5; Tencent licence review pending (replacement rescinded 2026-11-04)"
-    model :kimodo_motionbricks, :innovation, "text to motion and motion on ggml-rd, stage 7"
-    model :zipformer_sherpa_onnx, :boring, "streaming transducer on CPU, 5-10 ms per 160 ms chunk; phonemes to visemes, 2-frame EMA, 150-210 ms end to end; stage 8"
-    model :silero_vad, :boring, "speech gate ahead of Zipformer"
-    model :xls_r, :not_spent, "rejected for stage 8: bidirectional attention misses the 150 ms budget"
-    model :mfcc_viseme_gan_visemenet, :retired, "stage 8, replaced by Zipformer"
-    model :bonsai_2_27b_heretic_v2, :boring, "OS-Software/Ternary-Bonsai-2-27B-Uncensored-Heretic-v2-GGUF: ternary Bonsai 2 with the Heretic OT-Ridge LoRA baked in (1/100 refusals, KL 0.0256), served by Prism llama.cpp or NInfer (RFD 2311, bonsai2-27b-heretic.ninfer); the local language model, a tool and a scorer, not in the product"
-    model :claude, :boring, "Anthropic Claude through Hermes: the agent that does this work; a tool, nothing of it ships"
-    model :gemma_asr, :retired, "RFD 2180 dropped the gemma-auto track"
-    model :cyclegan_style_transfer, :retired, "stage 1, retired by the OmniGen2 decision"
-    model :see_through_ggml, :retired, "anime cel layer decomposition, stage 1, retired by the OmniGen2 decision"
-    model :persona_rectgtn, :paid, "not a model: the exact planner this repository serves"
+    model :omnigen2_editscore7b_v1_1, :innovation, "image generation + edit with the EditScore head; stage 1 model and judge (2026-11-04)", params: 7.7, weights: 31.3, source: "OmniGen2/OmniGen2 (4B DiT + Qwen2.5-VL-3B MLLM, stored fp32, 31.22 GB) + the v1.1 LoRA 0.08 GB"
+    model :editscore_7b, :boring, "pairwise image-edit judge; the MaskScore/EditScore ladders; a gate", params: 8.3, weights: 16.9, source: "Qwen2.5-VL-7B-Instruct 16.58 GB bf16 + adapter 0.32 GB"
+    model :llada_o, :retired, "diffusion LM image edit; beat OmniGen2 on one pair at 14x wall, n=1; retired 2026-11-04, OmniGen2-EditScore7B-v1.1 is the image model", params: 8.0, weights: 16.0, source: "LLaDA-8B base 16.03 GB bf16; LLaDA-O-8B weights gated"
+    model :trellis2, :innovation, "image to textured mesh, stage 2", params: 4.0, weights: 8.1, source: "microsoft/TRELLIS.2-4B: 1.3B img2shape + 1.3B imgshape2tex DiTs at one resolution plus encoders, bf16; repo 16.24 GB with both 512 and 1024 variants"
+    model :pixal3d, :innovation, "image to PBR mesh as a ggml-rd guest (RFD 2336); DINOv3 and BiRefNet HR paid with it", params: 0.55, weights: 1.65, source: "DINOv3 ViT-L 0.3B 1.21 GB fp32 + BiRefNet HR 0.22B 0.44 GB; Pixal3D head not published"
+    model :skintokens_tokenrig, :innovation, "auto-rig, stage 4; first forward pass logged", source: "weights not on a public hub; size unmeasured"
+    model :p3_sam, :innovation, "mesh segmentation, stage 5; Tencent licence review pending (replacement rescinded 2026-11-04)", params: 0.11, weights: 0.45, source: "tencent/Hunyuan3D-Part p3sam.safetensors 0.45 GB (fp32)"
+    model :kimodo_motionbricks, :innovation, "text to motion and motion on ggml-rd, stage 7", source: "Kimodo repository gated; size unmeasured"
+    model :zipformer_sherpa_onnx, :boring, "streaming transducer on CPU, 5-10 ms per 160 ms chunk; phonemes to visemes, 2-frame EMA, 150-210 ms end to end; stage 8", params: 0.066, weights: 0.26, source: "streaming-zipformer-en-2023-06-26 encoder fp32 0.26 GB, int8 0.07 GB"
+    model :silero_vad, :boring, "speech gate ahead of Zipformer", params: 0.0018, weights: 0.002, source: "onnx-community/silero-vad model.onnx"
+    model :xls_r, :not_spent, "rejected for stage 8: bidirectional attention misses the 150 ms budget", params: 0.3, weights: 1.27, source: "facebook/wav2vec2-xls-r-300m fp32"
+    model :mfcc_viseme_gan_visemenet, :retired, "stage 8, replaced by Zipformer", source: "small archived GAN; size unmeasured"
+    model :bonsai_2_27b_heretic_v2, :boring, "OS-Software/Ternary-Bonsai-2-27B-Uncensored-Heretic-v2-GGUF: ternary Bonsai 2 with the Heretic OT-Ridge LoRA baked in (1/100 refusals, KL 0.0256), served by Prism llama.cpp or NInfer (RFD 2311, bonsai2-27b-heretic.ninfer); the local language model, a tool and a scorer, not in the product", params: 26.9, weights: 7.21, bits: 2.14, source: "PQ2_0 7.21 GB (2.14 bits/param), PTQ1_0 5.95 GB (1.77); the F16 original is 53.81 GB; mmproj Q8_0 0.63 GB"
+    model :claude, :boring, "Anthropic Claude through Hermes: the agent that does this work; a tool, nothing of it ships", source: "parameter count and weights undisclosed by Anthropic; served, never downloaded"
+    model :gemma_asr, :retired, "RFD 2180 dropped the gemma-auto track", source: "retired track; version and size not recorded"
+    model :cyclegan_style_transfer, :retired, "stage 1, retired by the OmniGen2 decision", params: 0.011, weights: 0.045, source: "one ResNet generator, fp32"
+    model :see_through_ggml, :retired, "anime cel layer decomposition, stage 1, retired by the OmniGen2 decision", source: "ggml guest; size unmeasured"
+    model :persona_rectgtn, :paid, "not a model: the exact planner this repository serves", params: 0.0, weights: 0.0, source: "no weights"
 
     # ---- the schema: the RECTGTN domain read as ReBAC definitions (verbs are the planner's actions)
     definition :subject do
@@ -172,8 +175,19 @@ subjects = for {:subject, s, ss} <- rows, do: {s, ss}
 
 IO.puts("# tokens")
 for {:token, n, status, note} <- rows, do: IO.puts("token:#{n}  #{status}  #{note || ""}")
-IO.puts("\n# models")
-for {:model, n, status, note} <- rows, do: IO.puts("model:#{n}  #{status}  #{note}")
+IO.puts("\n# models  (params B · shipped GB · avg bits/param · at 2 bits GB, Bonsai 2 PQ2_0 style)")
+fmt = fn
+  nil -> "   ?  "
+  x when is_float(x) -> :io_lib.format("~6.2f", [x]) |> to_string()
+  x -> :io_lib.format("~6.2f", [x / 1]) |> to_string()
+end
+for {:model, n, status, note, sz} <- rows do
+  p = sz[:params]; w = sz[:weights]
+  bits = sz[:bits] || (if p && w && p > 0, do: w * 8 / p, else: nil)
+  two = if p, do: p / 4, else: nil
+  IO.puts("model:#{n}  #{status}  params #{fmt.(p)} B · shipped #{fmt.(w)} GB · #{fmt.(bits)} bits/param · 2-bit #{fmt.(two)} GB")
+  IO.puts("    #{note}" <> if(sz[:source], do: "\n    sizes: #{sz[:source]}", else: ""))
+end
 IO.puts("\n# tuples")
 missing =
   for {s, ss} <- subjects, {n, _name, req, draws} <- stages, Integer.to_string(n) in ss, reduce: [] do
