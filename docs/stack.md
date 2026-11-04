@@ -77,7 +77,7 @@ Each row swaps hand-written knowledge for a learned or searched method and leave
 
 - Stage 6 has no learned or searched component and no corpus to grow one.
 - Stage 9's trace-to-domain induction has no repository.
-- No end-to-end gate runs a photo through stages 1–10 to a loaded guest; per-stage probes exist (Gate 0G for usd.elf, rig contract `[API-Contract] PASS` in the older web studio).
+- No end-to-end gate runs a photo through stages 1–10 to a loaded guest; per-stage probes exist (Gate 0G for usd.elf). The retired web studio's rig-contract gate (`[API-Contract] PASS`) has no successor in the guest pipeline.
 - `persona-fire` (chibifire-stages, 2023) carries no description; its relation to `interactor-taskweft-persona` is unknown.
 
-Unchecked: READMEs, CI, releases, licences on the Tencent-derived model images (P3-SAM review pending), and whether the 2026 web studio (`Weftspun3DStudio`) is retired or parallel.
+Unchecked: READMEs, CI, releases, and licences on the Tencent-derived model images (P3-SAM review pending). The 2026 browser studio (Weftspun3DStudio: photo → TRELLIS GLB → template rig → VRM download, RFD 0005) is retired; the godot-sandbox guest pipeline above is its successor, and its `AVATAR_PIPELINE.md` and rig contract stand only as history.
