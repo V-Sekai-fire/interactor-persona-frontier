@@ -1,5 +1,9 @@
 # The persona as an A2A webserver that improves its own domain from experience.
 #
+# The domain covers three subjects, character, prop and world, each with its own stage
+# subset; all three are GPU-skinned and GPU-animated (stages 4 and 7), after Remedy's
+# large-scale GPU skinning for Alan Wake 2's vegetation (GDC Vault 1034310).
+#
 # Transport: HTTP/1.1 over :gen_tcp, no dependencies. The answer to a goal is
 # exactly what `persona_plan` prints for the generated domain; the server adds
 # the frontier loop around it. Run: elixir server.exs --port 9920
@@ -60,26 +64,34 @@ defmodule Persona do
     end
   end
 
-  # A goal is `reach-stage-N`, `stage N`, `N`, a stage name, or empty (stage 10).
+  def subjects(k), do: k["subjects"] || %{"character" => %{"stages" => Map.keys(k["stages"])}}
+
+  # A goal is `reach-<subject>-N`, `<subject> N`, `<subject>` (its last stage), a stage number
+  # or stage name (the character's), or empty (the character's stage 10). Subjects are the
+  # knowledge file's: character, prop, world.
   def goal_of(text) do
     k = knowledge()
+    subs = subjects(k)
     t = text |> String.trim() |> String.downcase()
-    cond do
-      t == "" -> {:ok, "10"}
-      Map.has_key?(k["stages"], t) -> {:ok, t}
-      m = Regex.run(~r/^(?:reach-)?stage[- ]?(\d+)$/, t) -> if Map.has_key?(k["stages"], Enum.at(m, 1)), do: {:ok, Enum.at(m, 1)}, else: :undeclared
-      true ->
-        case Enum.find(k["stages"], fn {_, s} -> s["name"] == t end) do
-          {n, _} -> {:ok, n}
-          nil -> :undeclared
-        end
+    stage_of = fn w ->
+      cond do
+        Map.has_key?(k["stages"], w) -> w
+        true -> case Enum.find(k["stages"], fn {_, s} -> s["name"] == w end), do: ({n, _} -> n; nil -> nil)
+      end
     end
+    {subj, rest} =
+      case Regex.run(~r/^(?:reach-)?(\w+)[- ](.+)$/, t) do
+        [_, a, b] when is_map_key(subs, a) -> {a, b}
+        _ -> if Map.has_key?(subs, t), do: {t, ""}, else: {"character", t}
+      end
+    n = if rest == "", do: List.last(subs[subj]["stages"]), else: stage_of.(String.replace_prefix(rest, "stage-", "") |> String.replace_prefix("stage ", ""))
+    if n != nil and n in subs[subj]["stages"], do: {:ok, subj, n}, else: :undeclared
   end
 
   def answer(text) do
     case goal_of(text) do
       :undeclared -> {%{"refused" => "undeclared_goal"}, 0}
-      {:ok, n} -> plan(Gen.problem(knowledge(), "request", [], [], "reach-stage-#{n}"))
+      {:ok, subj, n} -> plan(Gen.problem(knowledge(), "request", [], [], "reach-#{subj}-#{n}"))
     end
   end
 end
@@ -95,25 +107,24 @@ defmodule Frontier do
 
   def record(t), do: File.write!(@traces, JSON.encode!(Map.put(t, "at", DateTime.to_iso8601(DateTime.utc_now()))) <> "\n", [:append])
 
+  # A level is (subject, goal position, held prefix) over that subject's own stage list.
   def levels do
     k = Persona.knowledge()
-    n = map_size(k["stages"])
-    stats = traces() |> Enum.filter(&(&1["kind"] == "practice")) |> Enum.group_by(&{&1["goal"], &1["held"]})
-    for g <- 1..n, h <- 0..(g - 1) do
-      ts = Map.get(stats, {g, h}, [])
-      reached = Enum.count(ts, & &1["reached"])
-      %{"goal" => g, "held" => h, "attempts" => length(ts), "reached" => reached}
+    stats = traces() |> Enum.filter(&(&1["kind"] == "practice")) |> Enum.group_by(&{&1["subject"], &1["goal"], &1["held"]})
+    for {subj, sd} <- Persona.subjects(k), g <- 1..length(sd["stages"]), h <- 0..(g - 1) do
+      ts = Map.get(stats, {subj, g, h}, [])
+      %{"subject" => subj, "goal" => g, "held" => h, "attempts" => length(ts), "reached" => Enum.count(ts, & &1["reached"])}
     end
   end
 
   def next_level do
     ls = levels()
-    reached = MapSet.new(ls |> Enum.filter(&(&1["reached"] > 0)) |> Enum.map(&{&1["goal"], &1["held"]}))
+    reached = MapSet.new(ls |> Enum.filter(&(&1["reached"] > 0)) |> Enum.map(&{&1["subject"], &1["goal"], &1["held"]}))
     edge = Enum.filter(ls, fn l ->
       (l["attempts"] > 0 and l["reached"] < l["attempts"]) or
-        (l["attempts"] == 0 and (MapSet.member?(reached, {l["goal"] - 1, l["held"]}) or MapSet.member?(reached, {l["goal"], l["held"] - 1}) or l["goal"] == 1))
+        (l["attempts"] == 0 and (MapSet.member?(reached, {l["subject"], l["goal"] - 1, l["held"]}) or MapSet.member?(reached, {l["subject"], l["goal"], l["held"] - 1}) or l["goal"] == 1))
     end)
-    Enum.min_by(edge, &{&1["attempts"], &1["goal"], -&1["held"]}, fn -> nil end)
+    Enum.min_by(edge, &{&1["attempts"], &1["goal"], -&1["held"], &1["subject"]}, fn -> nil end)
   end
 
   def practice do
@@ -121,13 +132,17 @@ defmodule Frontier do
       nil -> %{"done" => true}
       l ->
         k = Persona.knowledge()
-        held = Enum.map(1..l["held"]//1, &Integer.to_string/1)
+        subj = l["subject"]
+        list = Persona.subjects(k)[subj]["stages"]
+        held_n = Enum.take(list, l["held"])
+        held = Enum.map(held_n, &"#{subj}-#{&1}")
+        goal_n = Enum.at(list, l["goal"] - 1)
         # tokens of held stages are held; the rest are drawn at random, so the plan must acquire them
-        tokens = k["stages"] |> Enum.filter(fn {n, _} -> n in held end) |> Enum.flat_map(fn {_, s} -> s["tokens"] end)
+        tokens = k["stages"] |> Enum.filter(fn {n, _} -> n in held_n end) |> Enum.flat_map(fn {_, s} -> s["tokens"] end)
         extra = k["stages"] |> Enum.flat_map(fn {_, s} -> s["tokens"] end) |> Enum.filter(fn _ -> :rand.uniform() < 0.3 end)
-        {plan, ms} = Persona.plan(Gen.problem(k, "practice", held, Enum.uniq(tokens ++ extra), "reach-stage-#{l["goal"]}"))
+        {plan, ms} = Persona.plan(Gen.problem(k, "practice", held, Enum.uniq(tokens ++ extra), "reach-#{subj}-#{goal_n}"))
         steps = plan["steps"] || []
-        t = %{"kind" => "practice", "goal" => l["goal"], "held" => l["held"], "reached" => plan["reached"] == true,
+        t = %{"kind" => "practice", "subject" => subj, "goal" => l["goal"], "held" => l["held"], "reached" => plan["reached"] == true,
               "refused" => plan["refused"], "steps" => length(steps), "ms" => ms,
               "settled" => steps |> Enum.map(& &1["action"]) |> Enum.filter(&String.starts_with?(&1, "settle-"))}
         record(t)
@@ -137,8 +152,9 @@ defmodule Frontier do
 
   # An experience report from a stage that ran for real: which stages held before, which action
   # ran, whether it settled its stage, and how long it took (ISO 8601 duration).
-  def experience(%{"action" => "settle-" <> n, "held_before" => hb, "settled" => s} = r) when is_list(hb) and is_boolean(s) do
-    t = %{"kind" => "experience", "stage" => n, "held_before" => Enum.map(hb, &to_string/1), "settled" => s, "duration" => r["duration"]}
+  def experience(%{"action" => "settle-" <> rest, "held_before" => hb, "settled" => s} = r) when is_list(hb) and is_boolean(s) do
+    {subj, n} = case String.split(rest, "-", parts: 2), do: ([a, b] -> {a, b}; [b] -> {"character", b})
+    t = %{"kind" => "experience", "subject" => subj, "stage" => n, "held_before" => Enum.map(hb, &to_string/1), "settled" => s, "duration" => r["duration"]}
     record(t)
     %{"recorded" => t}
   end
@@ -157,8 +173,10 @@ defmodule Frontier do
       reports = Enum.filter(ex, &(&1["stage"] == n))
       ok = Enum.filter(reports, & &1["settled"]); bad = Enum.reject(reports, & &1["settled"])
       if ok != [] and bad != [] do
-        always = ok |> Enum.map(&MapSet.new(&1["held_before"])) |> Enum.reduce(&MapSet.intersection/2)
-        never = bad |> Enum.map(&MapSet.new(&1["held_before"])) |> Enum.reduce(&MapSet.union/2)
+        # a held stage is reported as "<subject>-N" or "N"; the requirement learned is the stage N
+        bare = fn hb -> MapSet.new(hb, &String.replace(&1, ~r/^[a-z]+-/, "")) end
+        always = ok |> Enum.map(&bare.(&1["held_before"])) |> Enum.reduce(&MapSet.intersection/2)
+        never = bad |> Enum.map(&bare.(&1["held_before"])) |> Enum.reduce(&MapSet.union/2)
         learned = MapSet.difference(always, never) |> MapSet.delete(n) |> Enum.filter(&Map.has_key?(acc["stages"], &1))
         acc |> update_in(["stages", n, "requires"], &Enum.uniq(&1 ++ learned)) |> update_in(["learned", n], &Enum.uniq((&1 || []) ++ learned))
       else
@@ -182,9 +200,9 @@ defmodule Frontier do
   def gate(domain_path, k) do
     plan = Persona.plan_exe()
     run = fn d, p -> {out, _} = System.cmd(plan, [d, p], stderr_to_stdout: true); JSON.decode(out) end
-    File.write!("problems/.gate.jsonld", JSON.encode!(Gen.problem(k, "gate", [], [], "reach-stage-10")))
+    File.write!("problems/.gate.jsonld", JSON.encode!(Gen.problem(k, "gate", [], [], "reach-character-10")))
     {:ok, gold} = run.(domain_path, "problems/.gate.jsonld")
-    positive = gold["reached"] == true and Enum.count(gold["steps"], &String.starts_with?(&1["action"], "settle-")) == map_size(k["stages"])
+    positive = gold["reached"] == true and Enum.count(gold["steps"], &String.starts_with?(&1["action"], "settle-")) == length(Persona.subjects(k)["character"]["stages"])
     # planted fault: stage 10 forgets every requirement, so its plan must shrink
     broken = update_in(k, ["stages", "10", "requires"], fn _ -> [] end)
     File.write!("domains/.broken.jsonld", JSON.encode!(Gen.domain(broken)))
@@ -202,7 +220,7 @@ defmodule Web do
       "capabilities" => %{"streaming" => false, "pushNotifications" => false},
       "defaultInputModes" => ["text/plain"], "defaultOutputModes" => ["application/json"],
       "skills" => [%{"id" => "plan", "name" => "Plan to a stage", "tags" => ["planning", "taskweft", "frontier"],
-                     "description" => "Send a stage goal as text: reach-stage-N, a stage name, or empty for stage 10.", "examples" => ["reach-stage-10", "garments"]}]}
+                     "description" => "Send a goal as text: reach-<subject>-N (subjects: character, prop, world), a subject alone for its last stage, a stage name alone for the character, or empty.", "examples" => ["reach-character-10", "world", "prop 7", "garments"]}]}
   end
 
   def rpc(body) do

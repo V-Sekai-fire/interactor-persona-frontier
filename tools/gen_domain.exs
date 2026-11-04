@@ -8,13 +8,19 @@ defmodule Gen do
   def domain(k) do
     stages = k["stages"]
     tokens = stages |> Enum.flat_map(fn {_, s} -> s["tokens"] end) |> Enum.uniq() |> Enum.sort()
+    subjects = k["subjects"] || %{"character" => %{"stages" => Map.keys(stages)}}
+    # a subject (character, prop, world) owns a subset of the stages; a requirement outside
+    # that subset is dropped for it, so a world skips the body, the face and the persona
+    pairs = for {subj, sd} <- subjects, n <- sd["stages"], do: {subj, n}
+    req = fn subj, n -> Enum.filter(stages[n]["requires"], &(&1 in subjects[subj]["stages"])) end
     actions =
       Map.new(tokens, fn t -> {"acquire-token-#{t}", %{"params" => [], "body" => [set("/token/#{t}")]}} end)
-      |> Map.merge(Map.new(stages, fn {n, s} ->
-        body = Enum.map(s["requires"], &ge("/stage/#{&1}")) ++ Enum.map(s["tokens"], &ge("/token/#{&1}")) ++ [set("/stage/#{n}")]
+      |> Map.merge(Map.new(pairs, fn {subj, n} ->
+        s = stages[n]
+        body = Enum.map(req.(subj, n), &ge("/stage/#{subj}-#{&1}")) ++ Enum.map(s["tokens"], &ge("/token/#{&1}")) ++ [set("/stage/#{subj}-#{n}")]
         a = %{"params" => [], "body" => body}
         a = case k["durations"][n], do: (nil -> a; d -> Map.put(a, "duration", d))
-        {"settle-#{n}", a}
+        {"settle-#{subj}-#{n}", a}
       end))
     methods =
       Map.new(tokens, fn t ->
@@ -22,30 +28,33 @@ defmodule Gen do
           %{"name" => "held", "check" => [ge("/token/#{t}")], "subtasks" => []},
           %{"name" => "acquire", "subtasks" => [["acquire-token-#{t}"]]}]}}
       end)
-      |> Map.merge(Map.new(stages, fn {n, s} ->
-        subs = Enum.map(s["requires"], &["reach-stage-#{&1}"]) ++ Enum.map(s["tokens"], &["reach-token-#{&1}"]) ++ [["settle-#{n}"]]
-        {"reach-stage-#{n}", %{"params" => [], "alternatives" => [
-          %{"name" => "held", "check" => [ge("/stage/#{n}")], "subtasks" => []},
+      |> Map.merge(Map.new(pairs, fn {subj, n} ->
+        s = stages[n]
+        subs = Enum.map(req.(subj, n), &["reach-#{subj}-#{&1}"]) ++ Enum.map(s["tokens"], &["reach-token-#{&1}"]) ++ [["settle-#{subj}-#{n}"]]
+        {"reach-#{subj}-#{n}", %{"params" => [], "alternatives" => [
+          %{"name" => "held", "check" => [ge("/stage/#{subj}-#{n}")], "subtasks" => []},
           %{"name" => "settle", "subtasks" => subs}]}}
       end))
     %{"@context" => %{"VSEKAI" => "https://v-sekai.org/", "domain" => "VSEKAI:planning/domain/"},
       "@type" => "domain:Definition", "name" => "character_stack", "source" => "interactor-persona-frontier",
       "version" => "0.1.#{k["revision"]}",
-      "description" => "The look-dev to character-persona pipeline: settle-N holds when the stages it requires are settled and the repositories it draws on are acquired. Requirements and durations are learned from experience reports; see frontier/knowledge.json.",
+      "description" => "The look-dev pipeline for characters, props and worlds, all GPU-skinned: settle-<subject>-N holds when the stages it requires are settled and the repositories it draws on are acquired. Requirements and durations are learned from experience reports; see frontier/knowledge.json.",
       "variables" => [
-        %{"name" => "stage", "type" => "int", "description" => "1 when a pipeline stage is settled.", "init" => %{}},
+        %{"name" => "stage", "type" => "int", "description" => "1 when a pipeline stage is settled for a subject (character, prop or world).", "init" => %{}},
         %{"name" => "token", "type" => "int", "description" => "1 when a repository is acquired.", "init" => %{}}],
       "actions" => actions, "methods" => methods}
   end
 
   def problem(k, name, held_stages, held_tokens, goal) do
     stages = k["stages"]
+    subjects = k["subjects"] || %{"character" => %{"stages" => Map.keys(stages)}}
+    keys = for {subj, sd} <- subjects, n <- sd["stages"], do: "#{subj}-#{n}"
     tokens = stages |> Enum.flat_map(fn {_, s} -> s["tokens"] end) |> Enum.uniq()
     %{"@context" => %{"VSEKAI" => "https://v-sekai.org/", "domain" => "VSEKAI:planning/domain/"},
       "@type" => "domain:Problem", "name" => name, "source" => "interactor-persona-frontier", "version" => "0.1.0",
       "description" => "Stages #{inspect(held_stages)} held; goal #{goal}.",
       "variables" => [
-        %{"name" => "stage", "type" => "int", "init" => Map.new(Map.keys(stages), &{&1, (if &1 in held_stages, do: 1, else: 0)})},
+        %{"name" => "stage", "type" => "int", "init" => Map.new(keys, &{&1, (if &1 in held_stages, do: 1, else: 0)})},
         %{"name" => "token", "type" => "int", "init" => Map.new(tokens, &{&1, (if &1 in held_tokens, do: 1, else: 0)})}],
       "capabilities" => %{"entities" => %{}, "graph" => %{"edges" => []}},
       "todo_list" => [[goal]], "domain" => "character_stack"}
@@ -57,7 +66,7 @@ case System.argv() do
   [] ->
     k = File.read!("frontier/knowledge.json") |> JSON.decode!()
     File.write!("domains/character-stack.jsonld", JSON.encode!(Gen.domain(k)))
-    File.write!("problems/character-stack-cold.jsonld", JSON.encode!(Gen.problem(k, "character_stack_cold", [], [], "reach-stage-10")))
+    File.write!("problems/character-stack-cold.jsonld", JSON.encode!(Gen.problem(k, "character_stack_cold", [], [], "reach-character-10")))
     IO.puts("domains/character-stack.jsonld revision #{k["revision"]}")
   _ -> IO.puts("usage: elixir tools/gen_domain.exs"); System.halt(2)
 end

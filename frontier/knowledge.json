@@ -49,14 +49,15 @@
    ]
   },
   "4": {
-   "name": "rig",
+   "name": "gpu-skin",
    "requires": [
     "3"
    ],
    "tokens": [
     "interactor-skintokens-auto-rig",
     "interactor-skintokens-guest",
-    "interactor-cage"
+    "interactor-cage",
+    "contract-ggml-rd"
    ]
   },
   "5": {
@@ -85,7 +86,7 @@
    ]
   },
   "7": {
-   "name": "motion",
+   "name": "gpu-motion",
    "requires": [
     "4"
    ],
@@ -116,6 +117,42 @@
     "interactor-taskweft-persona",
     "interactor-a2a",
     "weftspun-character-taxonomy"
+   ]
+  }
+ },
+ "subjects": {
+  "character": {
+   "stages": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "10"
+   ]
+  },
+  "prop": {
+   "stages": [
+    "1",
+    "2",
+    "4",
+    "6",
+    "7",
+    "10"
+   ]
+  },
+  "world": {
+   "stages": [
+    "1",
+    "2",
+    "4",
+    "6",
+    "7",
+    "10"
    ]
   }
  }
