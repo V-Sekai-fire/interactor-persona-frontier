@@ -65,63 +65,62 @@ definition node {                          # the frontier process
 
 | object | requires (stage#settled) | draws_on (token#acquired) |
 | --- | --- | --- |
-| stage:character-1 (look-dev) | — | token:omnigen2-editscore7b-v1.1, token:interactor-see-through-ggml, token:interactor-omnigen2-editscore-space |
-| stage:character-2 (image-to-3d) | stage:character-1 | token:interactor-trellis2-image-to-textured-mesh, token:contract-orbit-views |
-| stage:character-3 (body) | stage:character-2 | token:interactor-anny-fit, token:interactor-headfit, token:contract-anny-kernels |
-| stage:character-4 (gpu-skin) | stage:character-3 | token:interactor-skintokens-auto-rig, token:interactor-skintokens-guest, token:interactor-cage, token:contract-ggml-rd |
-| stage:character-5 (garments) | stage:character-4 | token:interactor-p3sam-mesh-segmentation, token:interactor-remesh, token:interactor-garment-fit, token:interactor-cloth-fit-guest, token:interactor-drape, token:interactor-bake |
-| stage:character-6 (look-render) | stage:character-2, stage:character-5 | token:interactor-slughorn, token:thorvg |
-| stage:character-7 (gpu-motion) | stage:character-4 | token:interactor-kimodo-text-to-motion, token:interactor-motion-retarget, token:interactor-motion-matching-guest |
-| stage:character-8 (face-voice) | stage:character-3, stage:character-4 | token:interactor-headfit, token:mfcc-viseme-gan, token:interactor-voice |
-| stage:character-9 (persona) | stage:character-8 | token:interactor-taskweft-persona, token:interactor-a2a, token:weftspun-character-taxonomy |
-| stage:character-10 (runtime) | stage:character-6, stage:character-7, stage:character-8, stage:character-9 | token:contract-ggml-rd, token:contract-command, token:interactor-usd-guest, token:godot-vrm |
-| stage:prop-1 (look-dev) | — | token:omnigen2-editscore7b-v1.1, token:interactor-see-through-ggml, token:interactor-omnigen2-editscore-space |
-| stage:prop-2 (image-to-3d) | stage:prop-1 | token:interactor-trellis2-image-to-textured-mesh, token:contract-orbit-views |
-| stage:prop-4 (gpu-skin) | — | token:interactor-skintokens-auto-rig, token:interactor-skintokens-guest, token:interactor-cage, token:contract-ggml-rd |
-| stage:prop-6 (look-render) | stage:prop-2 | token:interactor-slughorn, token:thorvg |
-| stage:prop-7 (gpu-motion) | stage:prop-4 | token:interactor-kimodo-text-to-motion, token:interactor-motion-retarget, token:interactor-motion-matching-guest |
-| stage:prop-10 (runtime) | stage:prop-6, stage:prop-7 | token:contract-ggml-rd, token:contract-command, token:interactor-usd-guest, token:godot-vrm |
-| stage:world-1 (look-dev) | — | token:omnigen2-editscore7b-v1.1, token:interactor-see-through-ggml, token:interactor-omnigen2-editscore-space |
+| stage:world-1 (look-dev) | — | token:omnigen2-editscore7b-v1.1, token:interactor-omnigen2-editscore-space |
 | stage:world-2 (image-to-3d) | stage:world-1 | token:interactor-trellis2-image-to-textured-mesh, token:contract-orbit-views |
 | stage:world-4 (gpu-skin) | — | token:interactor-skintokens-auto-rig, token:interactor-skintokens-guest, token:interactor-cage, token:contract-ggml-rd |
 | stage:world-6 (look-render) | stage:world-2 | token:interactor-slughorn, token:thorvg |
 | stage:world-7 (gpu-motion) | stage:world-4 | token:interactor-kimodo-text-to-motion, token:interactor-motion-retarget, token:interactor-motion-matching-guest |
 | stage:world-10 (runtime) | stage:world-6, stage:world-7 | token:contract-ggml-rd, token:contract-command, token:interactor-usd-guest, token:godot-vrm |
+| stage:prop-1 (look-dev) | — | token:omnigen2-editscore7b-v1.1, token:interactor-omnigen2-editscore-space |
+| stage:prop-2 (image-to-3d) | stage:prop-1 | token:interactor-trellis2-image-to-textured-mesh, token:contract-orbit-views |
+| stage:prop-4 (gpu-skin) | — | token:interactor-skintokens-auto-rig, token:interactor-skintokens-guest, token:interactor-cage, token:contract-ggml-rd |
+| stage:prop-6 (look-render) | stage:prop-2 | token:interactor-slughorn, token:thorvg |
+| stage:prop-7 (gpu-motion) | stage:prop-4 | token:interactor-kimodo-text-to-motion, token:interactor-motion-retarget, token:interactor-motion-matching-guest |
+| stage:prop-10 (runtime) | stage:prop-6, stage:prop-7 | token:contract-ggml-rd, token:contract-command, token:interactor-usd-guest, token:godot-vrm |
+| stage:character-1 (look-dev) | — | token:omnigen2-editscore7b-v1.1, token:interactor-omnigen2-editscore-space |
+| stage:character-2 (image-to-3d) | stage:character-1 | token:interactor-trellis2-image-to-textured-mesh, token:contract-orbit-views |
+| stage:character-3 (body) | stage:character-2 | token:interactor-anny-fit, token:interactor-headfit, token:contract-anny-kernels |
+| stage:character-4 (gpu-skin) | stage:character-3 | token:interactor-skintokens-auto-rig, token:interactor-skintokens-guest, token:interactor-cage, token:contract-ggml-rd |
+| stage:character-5 (garments) | stage:character-4 | token:mesh-segmentation-REPLACEMENT-WANTED, token:interactor-remesh, token:interactor-garment-fit, token:interactor-cloth-fit-guest, token:interactor-drape, token:interactor-bake |
+| stage:character-6 (look-render) | stage:character-2, stage:character-5 | token:interactor-slughorn, token:thorvg |
+| stage:character-7 (gpu-motion) | stage:character-4 | token:interactor-kimodo-text-to-motion, token:interactor-motion-retarget, token:interactor-motion-matching-guest |
+| stage:character-8 (face-voice) | stage:character-3, stage:character-4 | token:interactor-headfit, token:mfcc-viseme-gan, token:interactor-voice |
+| stage:character-9 (persona) | stage:character-8 | token:interactor-taskweft-persona, token:interactor-a2a, token:weftspun-character-taxonomy |
+| stage:character-10 (runtime) | stage:character-6, stage:character-7, stage:character-8, stage:character-9 | token:contract-ggml-rd, token:contract-command, token:interactor-usd-guest, token:godot-vrm |
 
-### Tuples: tokens (`acquire-token-<repo>` is the verb; the object is the repository, a row of the two tables above)
+### Tuples: tokens (`acquire-token-<repo>` is the verb; the object is the repository)
 
 | object | class | acquired by |
 | --- | --- | --- |
 | token:contract-anny-kernels | Token 1 (Lean→Slang kernels) | subject:character |
-| token:contract-command | Token 1 (guest contract) | subject:character, subject:prop, subject:world |
-| token:contract-ggml-rd | Token 1 (guest substrate) | subject:character, subject:prop, subject:world |
-| token:contract-orbit-views | boring (standard) | subject:character, subject:prop, subject:world |
-| token:godot-vrm | boring (stock addon) | subject:character, subject:prop, subject:world |
+| token:contract-command | Token 1 (guest contract) | subject:world, subject:prop, subject:character |
+| token:contract-ggml-rd | Token 1 (guest substrate) | subject:world, subject:prop, subject:character |
+| token:contract-orbit-views | boring (standard) | subject:world, subject:prop, subject:character |
+| token:godot-vrm | boring (stock addon) | subject:world, subject:prop, subject:character |
 | token:interactor-a2a | already paid (A2A library) | subject:character |
 | token:interactor-anny-fit | Token 1 (guest) | subject:character |
 | token:interactor-bake | Token 1 (guest) | subject:character |
-| token:interactor-cage | Token 1 (guest) | subject:character, subject:prop, subject:world |
+| token:interactor-cage | Token 1 (guest) | subject:world, subject:prop, subject:character |
 | token:interactor-cloth-fit-guest | Token 1 (guest, GPU only) | subject:character |
 | token:interactor-drape | Token 1 (guest) | subject:character |
 | token:interactor-garment-fit | Token 1 (guest) | subject:character |
 | token:interactor-headfit | Token 1 (guest) | subject:character |
-| token:interactor-kimodo-text-to-motion | innovation (model image) | subject:character, subject:prop, subject:world |
-| token:interactor-motion-matching-guest | Token 1 (guest) | subject:character, subject:prop, subject:world |
-| token:interactor-motion-retarget | already paid (Lean) | subject:character, subject:prop, subject:world |
-| token:interactor-omnigen2-editscore-space | boring (static Space) | subject:character, subject:prop, subject:world |
-| token:interactor-p3sam-mesh-segmentation | innovation (model image, licence pending) | subject:character |
+| token:interactor-kimodo-text-to-motion | innovation (model image) | subject:world, subject:prop, subject:character |
+| token:interactor-motion-matching-guest | Token 1 (guest) | subject:world, subject:prop, subject:character |
+| token:interactor-motion-retarget | already paid (Lean) | subject:world, subject:prop, subject:character |
+| token:interactor-omnigen2-editscore-space | boring (static Space) | subject:world, subject:prop, subject:character |
 | token:interactor-remesh | Token 1 (guest) | subject:character |
-| token:interactor-see-through-ggml | innovation (ggml guest) | subject:character, subject:prop, subject:world |
-| token:interactor-skintokens-auto-rig | innovation (model image) | subject:character, subject:prop, subject:world |
-| token:interactor-skintokens-guest | Token 1 (guest) | subject:character, subject:prop, subject:world |
-| token:interactor-slughorn | innovation (Slug vector renderer) | subject:character, subject:prop, subject:world |
+| token:interactor-skintokens-auto-rig | innovation (model image) | subject:world, subject:prop, subject:character |
+| token:interactor-skintokens-guest | Token 1 (guest) | subject:world, subject:prop, subject:character |
+| token:interactor-slughorn | innovation (Slug vector renderer) | subject:world, subject:prop, subject:character |
 | token:interactor-taskweft-persona | already paid (planner) | subject:character |
-| token:interactor-trellis2-image-to-textured-mesh | innovation (model image) | subject:character, subject:prop, subject:world |
-| token:interactor-usd-guest | Token 1 (guest) | subject:character, subject:prop, subject:world |
+| token:interactor-trellis2-image-to-textured-mesh | innovation (model image) | subject:world, subject:prop, subject:character |
+| token:interactor-usd-guest | Token 1 (guest) | subject:world, subject:prop, subject:character |
 | token:interactor-voice | Token 1 (guest) | subject:character |
+| token:mesh-segmentation-REPLACEMENT-WANTED | **REPLACE ASAP**: interactor-p3sam-mesh-segmentation is withdrawn (Tencent licence review pending); no owner yet, so every garment plan acquires a token nobody holds | subject:character |
 | token:mfcc-viseme-gan | innovation (archived model) | subject:character |
-| token:omnigen2-editscore7b-v1.1 | innovation (image model, HF weights) | subject:character, subject:prop, subject:world |
-| token:thorvg | boring (stock) | subject:character, subject:prop, subject:world |
+| token:omnigen2-editscore7b-v1.1 | innovation (image model, HF weights; replaces interactor-see-through-ggml) | subject:world, subject:prop, subject:character |
+| token:thorvg | boring (stock) | subject:world, subject:prop, subject:character |
 | token:weftspun-character-taxonomy | boring (Elixir service) | subject:character |
 
 ### Tuples: the node and the store
@@ -133,3 +132,25 @@ node:frontier#erlang_peer@cookie_holder:*       # --cookie, --cookie-file, or ~/
 ```
 
 Three gaps read straight off the schema: `http_caller` is `anyone`, so `learn` and `experience` have no stronger guard than the socket; the Erlang side has one credential, the cookie; and nothing distinguishes a reporter (the owning repository's CI) from a reader.
+
+## Language models, as tokens
+
+Every model is a token too: weights are a substrate whose licence, size and host decide what can be shipped. Collected from this desk's skills, facts and the stack grading, not from a repository scan; a row without a repository is a model we run as a tool or a judge.
+
+| token | kind | where it stands | class |
+| --- | --- | --- | --- |
+| OmniGen2/OmniGen2-EditScore7B-v1.1 | image generation + edit, EditScore reward head | stage 1 image model and judge (operator, 2026-11-04) | innovation, in the product path |
+| EditScore-7B | pairwise image-edit judge | the MaskScore / EditScore ladders; `vlm-image-scoring` (Qwen3-VL-4B LoRA head) runs it locally | boring: a gate |
+| LLaDA-o | diffusion LM, image edit | logbook: beats OmniGen2 on one subject_remove pair at 14× wall, n=1 | not spent; parked |
+| TRELLIS2, Pixal3D | image → textured mesh (PBR) | stage 2 model images; Pixal3D as a ggml-rd guest (RFD 2336) | innovation |
+| DINOv3, BiRefNet HR | encoder, matting | inside the Pixal3D guest (RFD 2336) | already paid with Pixal3D |
+| SkinTokens (TokenRig) | auto-rig | stage 4 model image; logbook: first forward pass | innovation |
+| P3-SAM | mesh segmentation | stage 5; **withdrawn, licence review pending; replacement wanted** | retiring |
+| Kimodo, MotionBricks | text → motion, motion on ggml-rd | stage 7 model images and guest | innovation |
+| mfcc-viseme-gan, visemenet | speech → viseme | stage 8, archived 2021–22 models | already paid; retiring with the face model |
+| Bonsai 27B | language model | `bonsai-steamframe-vulkan`, `ninfer-bonsai-artifacts`: a serving target, frozen weights in the Alyx planner hypothesis | boring: a tool, not in the product |
+| Qwen3.5-27B (turboquant, Hermes) | language model | `turboquant-qwen35-27b`: local server on this desk | boring: a tool |
+| Gemma (ASR track) | speech recognition | logbook RFD 1171 rerank; RFD 2180 dropped the gemma-auto track | retired |
+| CycleGAN style transfer | image restyle | stage 1; retired by the OmniGen2 decision | retired |
+| interactor-see-through-ggml | anime cel layer decomposition | stage 1; retired by the OmniGen2 decision | retired |
+| The persona (RECTGTN) | not a model: an exact planner | the thing this repository serves; no weights | already paid |

@@ -10,7 +10,7 @@ Evidence base: repository names and descriptions of V-Sekai-fire (81), chibifire
 
 ```
 concept image / text
-  │ 1 look dev          OmniGen2-EditScore7B-v1.1 (image model) · see-through-ggml (cel layers) · EditScore/MaskScore ladder (judge)
+  │ 1 look dev          OmniGen2-EditScore7B-v1.1 (image model and judge) · EditScore/MaskScore ladder
   ▼
 textured mesh (PBR)
   │ 2 image→3D          trellis2 / pixal3d image-to-textured-mesh · voxhammer edit · contract-orbit-views
@@ -22,7 +22,7 @@ rigged, skinned body
   │ 4 rig/skin          interactor-skintokens-{guest,rig,auto-rig} · interactor-cage · interactor-character-domain-c-abi
   ▼
 dressed body
-  │ 5 garments          p3sam-mesh-segmentation → interactor-remesh → garment-fit → cloth-fit-guest → drape → bake
+  │ 5 garments          [segmentation: replacement wanted] → interactor-remesh → garment-fit → cloth-fit-guest → drape → bake
   ▼
 shaded character
   │ 6 look render       interactor-slughorn (SVG · ThorVG · Slug GPU vector) · entities-godot-toon-shaders (retiring)
@@ -50,7 +50,7 @@ Interchange between stages: OpenUSD (`.usda`, UsdSkel sublayer from skintokens-a
 | 2 | Image→3D | Learning (TRELLIS2, Pixal3D) + search (orbit-view consistency across `sphere_hammersley_sequence` cameras) | Fixed PBR channel set; voxhammer edit prompts | Model emits UsdSkel-ready topology without stage 3 |
 | 3 | Body fit | Search (in-guest L-BFGS over ANNY sliders; Lean-emitted forward/backward kernels) | ANNY parametric body itself: a hand-built prior with ~100 sliders | A learned body model fitted on `datasource-anny-render-corpus` beats ANNY on keypoint reprojection |
 | 4 | GPU skin | Learning (SkinTokens auto-rig) + compute (GPU skinning of characters, props and vegetation worlds on ggml-rd; the Alan Wake 2 recipe) | Humanoid bone naming; biharmonic cage bind; Delta Mush (DQS blocklisted) | SkinTokens weights pass the range-of-motion test bank with no cage |
-| 5 | Garments | Search (PolyFEM/IPC fit, AVBD drape: physics as a solver, GPU-only) | Segmentation labels (P3-SAM), remesh targets, body-only fit rule | A learned draper reproduces the AVBD result at interactive rate |
+| 5 | Garments | Search (PolyFEM/IPC fit, AVBD drape: physics as a solver, GPU-only) | Segmentation labels (P3-SAM, withdrawn pending licence review; a replacement is wanted), remesh targets, body-only fit rule | A learned draper reproduces the AVBD result at interactive rate |
 | 6 | Look render | Compute (Slug: exact Bezier evaluation per fragment, no tessellation; quality grows with the fragment budget) | SVG/ThorVG vector assets are data; the MToon parameter map and MaterialX ports are hand-written and retire as stage 1 emits vector layers | Stage 1 output feeds `interactor-slughorn` directly and no hand-ported shader remains |
 | 7 | GPU motion | Learning (Kimodo, MotionBricks on ggml-rd) + search (motion matching over a clip database) + compute (skeleton rigs of props and worlds animated at runtime in compute shaders) | SOMA30→humanoid retarget tables; G1 sim-to-real joint envelopes | Text-to-motion clips outscore the matched database on the walk-mode baseline |
 | 8 | Face/voice | Learning (MFCC→viseme GAN; unified expression transfer) | ARKit/Vive 124-morph template; viseme set | A speech-conditioned face model drives the template without the viseme intermediate |

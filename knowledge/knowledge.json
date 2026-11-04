@@ -1,137 +1,12 @@
 {
- "durations": {},
- "learned": {},
- "revision": 0,
- "stages": {
-  "1": {
-   "name": "look-dev",
-   "requires": [],
-   "tokens": [
-    "omnigen2-editscore7b-v1.1",
-    "interactor-see-through-ggml",
-    "interactor-omnigen2-editscore-space"
-   ]
-  },
-  "10": {
-   "name": "runtime",
-   "requires": [
-    "6",
-    "7",
-    "8",
-    "9"
-   ],
-   "tokens": [
-    "contract-ggml-rd",
-    "contract-command",
-    "interactor-usd-guest",
-    "godot-vrm"
-   ]
-  },
-  "2": {
-   "name": "image-to-3d",
-   "requires": [
-    "1"
-   ],
-   "tokens": [
-    "interactor-trellis2-image-to-textured-mesh",
-    "contract-orbit-views"
-   ]
-  },
-  "3": {
-   "name": "body",
-   "requires": [
-    "2"
-   ],
-   "tokens": [
-    "interactor-anny-fit",
-    "interactor-headfit",
-    "contract-anny-kernels"
-   ]
-  },
-  "4": {
-   "name": "gpu-skin",
-   "requires": [
-    "3"
-   ],
-   "tokens": [
-    "interactor-skintokens-auto-rig",
-    "interactor-skintokens-guest",
-    "interactor-cage",
-    "contract-ggml-rd"
-   ]
-  },
-  "5": {
-   "name": "garments",
-   "requires": [
-    "4"
-   ],
-   "tokens": [
-    "interactor-p3sam-mesh-segmentation",
-    "interactor-remesh",
-    "interactor-garment-fit",
-    "interactor-cloth-fit-guest",
-    "interactor-drape",
-    "interactor-bake"
-   ]
-  },
-  "6": {
-   "name": "look-render",
-   "requires": [
-    "2",
-    "5"
-   ],
-   "tokens": [
-    "interactor-slughorn",
-    "thorvg"
-   ]
-  },
-  "7": {
-   "name": "gpu-motion",
-   "requires": [
-    "4"
-   ],
-   "tokens": [
-    "interactor-kimodo-text-to-motion",
-    "interactor-motion-retarget",
-    "interactor-motion-matching-guest"
-   ]
-  },
-  "8": {
-   "name": "face-voice",
-   "requires": [
-    "3",
-    "4"
-   ],
-   "tokens": [
-    "interactor-headfit",
-    "mfcc-viseme-gan",
-    "interactor-voice"
-   ]
-  },
-  "9": {
-   "name": "persona",
-   "requires": [
-    "8"
-   ],
-   "tokens": [
-    "interactor-taskweft-persona",
-    "interactor-a2a",
-    "weftspun-character-taxonomy"
-   ]
-  }
- },
  "subjects": {
-  "character": {
+  "world": {
    "stages": [
     "1",
     "2",
-    "3",
     "4",
-    "5",
     "6",
     "7",
-    "8",
-    "9",
     "10"
    ]
   },
@@ -145,15 +20,139 @@
     "10"
    ]
   },
-  "world": {
+  "character": {
    "stages": [
     "1",
     "2",
+    "3",
     "4",
+    "5",
     "6",
     "7",
+    "8",
+    "9",
     "10"
    ]
   }
- }
+ },
+ "stages": {
+  "9": {
+   "tokens": [
+    "interactor-taskweft-persona",
+    "interactor-a2a",
+    "weftspun-character-taxonomy"
+   ],
+   "requires": [
+    "8"
+   ],
+   "name": "persona"
+  },
+  "8": {
+   "tokens": [
+    "interactor-headfit",
+    "mfcc-viseme-gan",
+    "interactor-voice"
+   ],
+   "requires": [
+    "3",
+    "4"
+   ],
+   "name": "face-voice"
+  },
+  "7": {
+   "tokens": [
+    "interactor-kimodo-text-to-motion",
+    "interactor-motion-retarget",
+    "interactor-motion-matching-guest"
+   ],
+   "requires": [
+    "4"
+   ],
+   "name": "gpu-motion"
+  },
+  "6": {
+   "tokens": [
+    "interactor-slughorn",
+    "thorvg"
+   ],
+   "requires": [
+    "2",
+    "5"
+   ],
+   "name": "look-render"
+  },
+  "5": {
+   "tokens": [
+    "mesh-segmentation-REPLACEMENT-WANTED",
+    "interactor-remesh",
+    "interactor-garment-fit",
+    "interactor-cloth-fit-guest",
+    "interactor-drape",
+    "interactor-bake"
+   ],
+   "requires": [
+    "4"
+   ],
+   "name": "garments"
+  },
+  "4": {
+   "tokens": [
+    "interactor-skintokens-auto-rig",
+    "interactor-skintokens-guest",
+    "interactor-cage",
+    "contract-ggml-rd"
+   ],
+   "requires": [
+    "3"
+   ],
+   "name": "gpu-skin"
+  },
+  "3": {
+   "tokens": [
+    "interactor-anny-fit",
+    "interactor-headfit",
+    "contract-anny-kernels"
+   ],
+   "requires": [
+    "2"
+   ],
+   "name": "body"
+  },
+  "2": {
+   "tokens": [
+    "interactor-trellis2-image-to-textured-mesh",
+    "contract-orbit-views"
+   ],
+   "requires": [
+    "1"
+   ],
+   "name": "image-to-3d"
+  },
+  "10": {
+   "tokens": [
+    "contract-ggml-rd",
+    "contract-command",
+    "interactor-usd-guest",
+    "godot-vrm"
+   ],
+   "requires": [
+    "6",
+    "7",
+    "8",
+    "9"
+   ],
+   "name": "runtime"
+  },
+  "1": {
+   "tokens": [
+    "omnigen2-editscore7b-v1.1",
+    "interactor-omnigen2-editscore-space"
+   ],
+   "requires": [],
+   "name": "look-dev"
+  }
+ },
+ "revision": 0,
+ "learned": {},
+ "durations": {}
 }

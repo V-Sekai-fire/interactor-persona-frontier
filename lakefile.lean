@@ -10,6 +10,13 @@ require persona from git "https://github.com/V-Sekai-fire/interactor-taskweft-pe
 -- `lake build -Kfdb=/usr/lib64/libfdb_c.so` links datasource-store's weft_fdb VFS in directly.
 def fdbLib : Option String := get_config? fdb
 
+-- The C objects are compiled with the system cc. The final link uses the libc Lean's toolchain
+-- was built against, which lacks `fcntl64`; glibc 2.28+ headers emit that symbol only under
+-- `_FILE_OFFSET_BITS=64`, which SQLite's LFS support turns on, so Linux builds disable LFS
+-- (off_t is 64-bit there anyway).
+def ccFor : FetchM String := pure "cc"
+def lfsFlags : Array String := if System.Platform.isOSX then #[] else #["-DSQLITE_DISABLE_LFS"]
+
 -- The C shim: SQLite in, JSON rows out (c/sql.c), with the vendored SQLite amalgamation compiled
 -- beside it, so the node links no system SQLite on any platform.
 target sql.o pkg : System.FilePath := do
@@ -17,12 +24,12 @@ target sql.o pkg : System.FilePath := do
   let srcJob ← inputTextFile <| pkg.dir / "c" / "sql.c"
   let leanInc := (← getLeanIncludeDir).toString
   let fdbFlag := if fdbLib.isSome then #["-DFRONTIER_WITH_FDB"] else #[]
-  buildO oFile srcJob (#["-I", leanInc, "-I", (pkg.dir / "thirdparty" / "sqlite").toString, "-fPIC", "-O2"] ++ fdbFlag) #[] "cc"
+  buildO oFile srcJob (#["-I", leanInc, "-I", (pkg.dir / "thirdparty" / "sqlite").toString, "-fPIC", "-O2"] ++ fdbFlag) #[] (← ccFor)
 
 target sqlite3.o pkg : System.FilePath := do
   let oFile := pkg.buildDir / "c" / "sqlite3.o"
   let srcJob ← inputTextFile <| pkg.dir / "thirdparty" / "sqlite" / "sqlite3.c"
-  buildO oFile srcJob #["-fPIC", "-O2", "-DSQLITE_THREADSAFE=1"] #[] "cc"
+  buildO oFile srcJob (#["-fPIC", "-O2", "-DSQLITE_THREADSAFE=1"] ++ lfsFlags) #[] (← ccFor)
 
 -- The VFS object (the store's rung 11 shape), against FoundationDB's client library named by
 -- path. Without -Kfdb the VFS still loads as the store's `weftfdb` extension through FRONTIER_VFS_EXT.
@@ -30,7 +37,7 @@ target fdb_vfs.o pkg : System.FilePath := do
   let oFile := pkg.buildDir / "c" / "fdb_vfs.o"
   let srcJob ← inputTextFile <| pkg.dir / "thirdparty" / "datasource-store" / "fdb_vfs.c"
   buildO oFile srcJob #["-I", (pkg.dir / "thirdparty" / "sqlite").toString, "-I", "/usr/include/foundationdb", "-I", "/usr/local/include/foundationdb",
-    "-DFDB_API_VERSION=730", "-D_POSIX_C_SOURCE=200809L", "-fPIC", "-O2"] #[] "cc"
+    "-DFDB_API_VERSION=730", "-D_POSIX_C_SOURCE=200809L", "-fPIC", "-O2"] #[] (← ccFor)
 
 extern_lib libfrontier_sql pkg := do
   let name := nameToStaticLib "frontier_sql"
