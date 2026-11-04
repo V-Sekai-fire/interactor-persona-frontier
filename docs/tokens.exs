@@ -188,6 +188,20 @@ for {:model, n, status, note, sz} <- rows do
   IO.puts("model:#{n}  #{status}  params #{fmt.(p)} B · shipped #{fmt.(w)} GB · #{fmt.(bits)} bits/param · 2-bit #{fmt.(two)} GB")
   IO.puts("    #{note}" <> if(sz[:source], do: "\n    sizes: #{sz[:source]}", else: ""))
 end
+# ---- what serving costs: the models a running cell must hold, as shipped and at 2 bits
+served = for {:model, n, st, _, sz} <- rows, st in [:innovation, :boring, :paid], sz[:weights] != nil, do: {n, sz}
+tools = [:bonsai_2_27b_heretic_v2, :claude, :editscore_7b]          # scorer, agent, judge: run beside the pipeline, not in a player's path
+{pipeline, beside} = Enum.split_with(served, fn {n, _} -> n not in tools end)
+sum = fn xs, k -> xs |> Enum.map(fn {_, sz} -> sz[k] || 0 end) |> Enum.sum() end
+two = fn xs -> xs |> Enum.map(fn {_, sz} -> (sz[:params] || 0) / 4 end) |> Enum.sum() end
+unmeasured = for {:model, n, st, _, sz} <- rows, st in [:innovation, :boring, :paid], sz[:weights] == nil, n != :claude, do: n
+IO.puts("\n# total size to serve (GB)")
+IO.puts("pipeline (stages 1-10, a player's path): shipped #{fmt.(sum.(pipeline, :weights))} GB · at 2 bits #{fmt.(two.(pipeline))} GB · #{length(pipeline)} models")
+IO.puts("beside it (judge, scorer):               shipped #{fmt.(sum.(beside, :weights))} GB · at 2 bits #{fmt.(two.(beside))} GB")
+IO.puts("everything measured:                     shipped #{fmt.(sum.(served, :weights))} GB · at 2 bits #{fmt.(two.(served))} GB")
+IO.puts("not in the sum (unmeasured):             #{Enum.join(unmeasured, ", ")}")
+IO.puts("the box: s-1vcpu-2gb has 50 GB SSD and 2 GB RAM, so no model in the pipeline runs on the cell; the cell serves plans, the models run where their GPU is")
+
 IO.puts("\n# tuples")
 missing =
   for {s, ss} <- subjects, {n, _name, req, draws} <- stages, Integer.to_string(n) in ss, reduce: [] do
