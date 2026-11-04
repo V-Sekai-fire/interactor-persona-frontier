@@ -3,9 +3,23 @@
 // a database URL of file:frontier?vfs=weft_fdb keeps the pages in FoundationDB.
 #include <lean/lean.h>
 #include <sqlite3.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifdef FRONTIER_WITH_FDB
+// datasource-store's weft_fdb VFS, linked in (thirdparty/datasource-store/fdb_vfs.c): the
+// FoundationDB network starts once per process, then the VFS registers under `weft_fdb`.
+int weft_fdb_start(const char *cluster_file);
+int weft_vfs_register(int make_default);
+static pthread_once_t g_fdb_once = PTHREAD_ONCE_INIT;
+static int g_fdb_err, g_fdb_rc = -1;
+static void fdb_start(void) {
+  g_fdb_err = weft_fdb_start(getenv("WEFT_FDB_CLUSTER_FILE"));
+  g_fdb_rc = g_fdb_err ? SQLITE_CANTOPEN : weft_vfs_register(0);
+}
+#endif
 
 typedef struct { char *buf; size_t len, cap; int rows; } sb;
 static void sb_put(sb *s, const char *p, size_t n) {
@@ -40,6 +54,12 @@ LEAN_EXPORT lean_obj_res frontier_sql(b_lean_obj_arg db_s, b_lean_obj_arg sql_s)
   const char *db = lean_string_cstr(db_s), *sql = lean_string_cstr(sql_s);
   sqlite3 *h = NULL; char *err = NULL;
   sb s = {0}; s.buf = malloc(64); s.cap = 64; s.buf[0] = 0;
+#ifdef FRONTIER_WITH_FDB
+  if (strstr(db, "vfs=weft_fdb")) {
+    pthread_once(&g_fdb_once, fdb_start);
+    if (g_fdb_rc != SQLITE_OK) { sb_str(&s, "{\"error\":\"weft_fdb did not start (WEFT_FDB_CLUSTER_FILE unset or cluster unreachable)\"}"); goto out; }
+  }
+#endif
   int rc = sqlite3_open_v2(db, &h, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_URI, NULL);
   if (rc != SQLITE_OK) { sb_str(&s, "{\"error\":"); sb_json(&s, h ? sqlite3_errmsg(h) : "open"); sb_str(&s, "}"); goto out; }
   const char *ext = getenv("FRONTIER_VFS_EXT");
@@ -48,6 +68,7 @@ LEAN_EXPORT lean_obj_res frontier_sql(b_lean_obj_arg db_s, b_lean_obj_arg sql_s)
     if (sqlite3_load_extension(h, ext, NULL, &err) != SQLITE_OK) { sb_str(&s, "{\"error\":"); sb_json(&s, err ? err : "load_extension"); sb_str(&s, "}"); sqlite3_free(err); goto out; }
   }
   sqlite3_busy_timeout(h, 5000);
+  if (strstr(db, "vfs=weft_fdb")) sqlite3_exec(h, "PRAGMA journal_mode=MEMORY; PRAGMA locking_mode=EXCLUSIVE;", NULL, NULL, NULL);
   sb_str(&s, "{\"rows\":[");
   if (sqlite3_exec(h, sql, cb, &s, &err) != SQLITE_OK) {
     s.len = 0; s.buf[0] = 0; sb_str(&s, "{\"error\":"); sb_json(&s, err ? err : "exec"); sb_str(&s, "}"); sqlite3_free(err); goto out;
