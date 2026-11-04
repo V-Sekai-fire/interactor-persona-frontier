@@ -2,7 +2,7 @@ import Lean.Data.Json
 /-!
 # The knowledge file, the generated domain, and the frontier loop.
 
-`frontier/knowledge.json` is the learned content: per stage its requirements, the repositories it
+`knowledge/knowledge.json` is the learned content: per stage its requirements, the repositories it
 draws on (tokens) and a measured duration; `subjects` names which stages a character, a prop and a
 world own. `Gen.domain` is the fixed meta-method that turns it into a RECTGTN JSON-LD domain in the
 engine shape, `Gen.problem` one problem over it. The frontier loop (levels, practice, experience,
@@ -64,7 +64,7 @@ def domain (k : Knowledge) : Json :=
       Json.mkObj [("name", "settle"), ("subtasks", Json.arr subs.toArray)]])])
   Json.mkObj [("@context", ctx), ("@type", "domain:Definition"), ("name", "character_stack"), ("source", "interactor-persona-frontier"),
     ("version", Json.str s!"0.1.{nat (field k "revision")}"),
-    ("description", "The look-dev pipeline for characters, props and worlds, all GPU-skinned: settle-<subject>-N holds when the stages it requires are settled and the repositories it draws on are acquired. Requirements and durations are learned from experience reports; see frontier/knowledge.json."),
+    ("description", "The look-dev pipeline for characters, props and worlds, all GPU-skinned: settle-<subject>-N holds when the stages it requires are settled and the repositories it draws on are acquired. Requirements and durations are learned from experience reports; see knowledge/knowledge.json."),
     ("variables", Json.arr #[
       Json.mkObj [("name", "stage"), ("type", "int"), ("description", "1 when a pipeline stage is settled for a subject (character, prop or world)."), ("init", Json.mkObj [])],
       Json.mkObj [("name", "token"), ("type", "int"), ("description", "1 when a repository is acquired."), ("init", Json.mkObj [])]]),
