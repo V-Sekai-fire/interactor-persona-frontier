@@ -13,8 +13,10 @@ p95 passes 500 ms, p99 passes 1 s or more than 1 % of requests fail.
     elixir build.exs                                              one command: deps, lake build, witness, PropCheck
     frontier --port 9920 --dist-port 9930 --cookie <cookie>      (or --cookie-file <path>; --host 0.0.0.0 in a container, --node-host <addr peers dial>)
 
-The box is DigitalOcean's `s-1vcpu-2gb` Basic Droplet ($12.00/mo, $0.01786/hr): `deploy/cloud-init.yaml`
-builds it, `deploy/k6.js` loads it with the challenge's thresholds.
+The box is DigitalOcean's `s-1vcpu-2gb` Basic Droplet ($12.00/mo, $0.01786/hr), and one box is one cell:
+FoundationDB, epmd and this node colocated in one pod with constant shares (`deploy/pod.exs up|smoke|down`).
+More capacity is more cells. `deploy/cloud-init.yaml` builds the box, `deploy/k6.js` loads it with the
+challenge's thresholds.
 
 | Route | Answer |
 | --- | --- |

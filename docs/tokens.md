@@ -6,7 +6,7 @@ The ledger's rule: a token is a substrate, the thing a failure takes down with i
 
 | Row | Substrate | Status | Why, and what fails with it |
 | --- | --- | --- | --- |
-| Store | SQLite through `c/sql.c`; pages in FoundationDB when `FRONTIER_VFS_EXT` loads datasource-store's `libweftfdb` | Token 2 | The one store. Traces and knowledge live there; the knowledge seed is the only thing that survives it. |
+| Store | SQLite (vendored amalgamation) through `c/sql.c`; datasource-store's `fdb_vfs.c` linked in with `-Kfdb`, pages in FoundationDB | Token 2 | The one store. Traces and knowledge live there; the knowledge seed is the only thing that survives it. Smoke-tested 2026-11-04: a practice trace read back from `weft/db/frontier/DELTA/` by `fdbcli`, no local file. |
 | Planner | `interactor-taskweft-persona` (RECTGTN over JSON-LD) as a Lean library | Already paid | The same Lean toolchain and planner Token 1's guests pay for; here as a host library, no guest ELF. |
 | Erlang node in Lean | `Frontier/Dist.lean`: EPMD ALIVE2, the v6 handshake, pass-through ETF, REG_SEND in, SEND out | **Not spent, and the ledger has no third token** | A hand-rolled distribution peer. Its failure takes down every Elixir caller of the node. The boring substitute is a BEAM-side port or `erl_interface` C node; this row is the one to retire or to claim against a token before a rung pins it. |
 | MD5 in Lean | `Frontier/Md5.lean`, for the handshake digest only | Not spent (part of the row above) | Dies with the Erlang-node row. A shim over libcrypto is the stock route if the row stays. |
@@ -24,7 +24,7 @@ The ledger's rule: a token is a substrate, the thing a failure takes down with i
 | k6 | `deploy/k6.js`, the challenge's thresholds | Stock | The measurement tool, not shipped. |
 | cloud-init, systemd | `deploy/cloud-init.yaml` | Stock | |
 | AlmaLinux 10 container | `Containerfile`, two stages | Stock | |
-| DigitalOcean `s-1vcpu-2gb` | the box, $12.00/mo | Stock | A supplier, not a substrate. |
+| DigitalOcean `s-1vcpu-2gb` | the box, $12.00/mo; one box is one cell (`deploy/pod.exs`): FoundationDB 0.45 cpu/1024 MiB, node 0.45/768, epmd 0.10/64, constant; more capacity is more cells | Stock | A supplier, not a substrate. |
 | GitHub Actions | `.github/workflows/node.yml` | Stock | Blocked by billing on this private repo. |
 | JSON-LD | the domain, problem and plan documents | Already paid | The persona's own interchange. |
 

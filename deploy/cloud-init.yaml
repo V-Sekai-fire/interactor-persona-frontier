@@ -1,7 +1,9 @@
 #cloud-config
 # The $12 server: DigitalOcean Basic Droplet s-1vcpu-2gb (Regular shared CPU, 1 vCPU, 2 GB,
 # 50 GB SSD, 2 TB transfer, $12.00/mo, $0.01786/hr; pricing table row "2 GiB · 1 vCPU", slug from
-# GET /v2/sizes). Everything runs on this one box: FoundationDB, the store's VFS, the Lean node.
+# GET /v2/sizes). One box is one cell: FoundationDB, epmd and the node colocated in one podman pod
+# (deploy/pod.exs) with constant shares of the box (fdb 0.45 cpu/1024 MiB, node 0.45/768, epmd
+# 0.10/64). More capacity is more boxes, each its own cell; nothing is shared between cells.
 #
 #   doctl compute droplet create frontier --size s-1vcpu-2gb --image ubuntu-24-04-x64 \
 #     --region nyc3 --ssh-keys <id> --user-data-file deploy/cloud-init.yaml --wait

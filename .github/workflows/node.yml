@@ -86,5 +86,6 @@ jobs:
       - name: The pages are in FoundationDB, not a local file
         run: |
           test ! -e frontier.sqlite
-          fdbcli --exec "getrange weft/ weft0 3" --timeout 10 | tee fdb-keys.txt
-          grep -q "^`weft/" fdb-keys.txt
+          fdbcli --exec "getrange weft/db/frontier/ weft/db/frontier0 20" --timeout 10 | tee fdb-keys.txt
+          grep -q 'weft/db/frontier/HEAD' fdb-keys.txt
+          grep -q '"kind":"practice"' fdb-keys.txt
