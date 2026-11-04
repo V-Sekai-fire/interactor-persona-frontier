@@ -31,7 +31,7 @@ moving character
   │ 7 motion            kimodo-text-to-motion · interactor-motion-guest · motion-retarget (SOMA30) · motion-matching-guest
   ▼
 speaking face
-  │ 8 face/voice        headfit expression transfer · mfcc-viseme-gan / visemenet-data · interactor-voice (Opus)
+  │ 8 face/voice        headfit expression transfer · sherpa-onnx Zipformer + Silero VAD (speech → viseme) · interactor-voice (Opus)
   ▼
 persona
   │ 9 agent             interactor-taskweft-persona · taskweft-nmm-personas · interactor-a2a · multimodal-semantic-ids · weftspun-character-taxonomy
@@ -53,7 +53,7 @@ Interchange between stages: OpenUSD (`.usda`, UsdSkel sublayer from skintokens-a
 | 5 | Garments | Search (PolyFEM/IPC fit, AVBD drape: physics as a solver, GPU-only) | Segmentation labels (P3-SAM, withdrawn pending licence review; a replacement is wanted), remesh targets, body-only fit rule | A learned draper reproduces the AVBD result at interactive rate |
 | 6 | Look render | Compute (Slug: exact Bezier evaluation per fragment, no tessellation; quality grows with the fragment budget) | SVG/ThorVG vector assets are data; the MToon parameter map and MaterialX ports are hand-written and retire as stage 1 emits vector layers | Stage 1 output feeds `interactor-slughorn` directly and no hand-ported shader remains |
 | 7 | GPU motion | Learning (Kimodo, MotionBricks on ggml-rd) + search (motion matching over a clip database) + compute (skeleton rigs of props and worlds animated at runtime in compute shaders) | SOMA30→humanoid retarget tables; G1 sim-to-real joint envelopes | Text-to-motion clips outscore the matched database on the walk-mode baseline |
-| 8 | Face/voice | Learning (MFCC→viseme GAN; unified expression transfer) | ARKit/Vive 124-morph template; viseme set | A speech-conditioned face model drives the template without the viseme intermediate |
+| 8 | Face/voice | Learning (streaming Zipformer transducer on CPU via sherpa-onnx, phonemes → visemes with a 2-frame EMA; unified expression transfer; the MFCC→viseme GAN is retired) | ARKit/Vive 124-morph template; viseme set | A speech-conditioned face model drives the template without the viseme intermediate |
 | 9 | Persona | Search (HTN / RECTGTN planner); GRAFCET sequential-function-chart personas are retired | **The planning domain is hand-written content.** `interactor-taskweft-persona` answers "from a planning domain instead of a neural network" | Domains are induced from MaskScore traces and play logs, not authored |
 | 10 | Runtime | Compute (RISC-V guests, ggml on RenderingDevice; WebGPU/Vulkan/Metal) | Guest ABI, wire formats, USD stream | n/a: this is the substrate that lets 1–9 spend more compute |
 
