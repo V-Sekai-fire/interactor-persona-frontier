@@ -77,6 +77,7 @@ defmodule Build do
       fn -> need("cc", "gcc", "build-essential") end,
       fn -> run("lake", ["build"]) end,
       fn -> run(Path.join(@root, ".lake/build/bin/frontier_witness"), []) end,
+      fn -> run("elixir", ["docs/tokens.exs"]) end,
       fn -> propcheck() end
     ]
     Enum.reduce_while(steps, {:ok, :start}, fn step, _ ->

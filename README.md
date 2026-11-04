@@ -10,7 +10,7 @@ Ask for a goal (`world`, `prop 7`, `garments`, `reach-character-10`) and the ans
 
 Run `elixir build.exs` once, ask for your own goal, report one real stage run, and read `knowledge/knowledge.json` to see what changed.
 
-Props and worlds run their own subsets of the stages, GPU-skinned like the characters. The routes, the Erlang node and the store are documented at the top of `Main.lean` and `Frontier/Dist.lean`; `.github/workflows/node.yml` is the one-box run (FoundationDB, the store's VFS, the node, a PropCheck peer), `deploy/cloud-init.yaml` builds that box as DigitalOcean's `s-1vcpu-2gb` droplet ($12.00/mo) and `deploy/k6.js` loads it with the challenge's thresholds; the grading of the stages, the repository survey and the token inventory sit in `docs/`.
+Props and worlds run their own subsets of the stages, GPU-skinned like the characters. The routes, the Erlang node and the store are documented at the top of `Main.lean` and `Frontier/Dist.lean`; `.github/workflows/node.yml` is the one-box run (FoundationDB, the store's VFS, the node, a PropCheck peer), `deploy/cloud-init.yaml` builds that box as DigitalOcean's `s-1vcpu-2gb` droplet ($12.00/mo) and `deploy/k6.js` loads it with the challenge's thresholds; the grading of the stages, the repository survey and the token ledger (`docs/tokens.exs`, run it) sit in `docs/`.
 
 ## Licence
 

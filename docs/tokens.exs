@@ -1,0 +1,193 @@
+# The token ledger of interactor-persona-frontier, as an Elixir DSL.
+#
+#   elixir docs/tokens.exs            prints the schema and every tuple, and checks that each
+#                                     stage's draws_on names a declared token (exit 1 otherwise)
+#
+# The ledger's rule: a token is a substrate, the thing a failure takes down with it, not a feature.
+# Boring and innovation tokens are the subjects and objects; capability tokens are the planner's
+# actions, and an action is a verb between a subject and an object. A relationship tuple is
+# `object#verb@subject`, a permission is a verb computed from other relationships (Zanzibar shape),
+# and the RECTGTN domain read that way is the schema. Statuses: :token_1 (guest ELFs on the pinned
+# double engine), :token_2 (one store, SQLite with pages in FoundationDB), :paid (the same substrate
+# as a token, counted once), :boring, :not_spent, :retired.
+
+defmodule Ledger do
+  defmacro __using__(_), do: quote(do: import Ledger)
+
+  defmacro ledger(do: block) do
+    quote do
+      Module.register_attribute(__MODULE__, :rows, accumulate: true)
+      unquote(block)
+      def rows, do: Enum.reverse(@rows)
+    end
+  end
+
+  defmacro token(name, status, note \\ nil), do: quote(do: @rows({:token, unquote(name), unquote(status), unquote(note)}))
+  defmacro model(name, status, note \\ nil), do: quote(do: @rows({:model, unquote(name), unquote(status), unquote(note)}))
+  defmacro subject(name, opts), do: quote(do: @rows({:subject, unquote(name), unquote(opts[:stages])}))
+  defmacro stage(n, name, opts), do: quote(do: @rows({:stage, unquote(n), unquote(name), unquote(opts[:requires] || []), unquote(opts[:draws_on] || [])}))
+  defmacro definition(name, do: block), do: quote(do: @rows({:definition, unquote(name), unquote(Macro.escape(block))}))
+  defmacro tuple(object, verb, subj), do: quote(do: @rows({:tuple, unquote(object), unquote(verb), unquote(subj)}))
+  defmacro gap(text), do: quote(do: @rows({:gap, unquote(text)}))
+end
+
+defmodule Frontier.Tokens do
+  use Ledger
+
+  ledger do
+    # ---- innovation tokens: substrates this repository runs on
+    token :store, :token_2, "SQLite (vendored amalgamation) through c/sql.c; datasource-store's fdb_vfs.c linked in with -Kfdb, pages in FoundationDB. Smoke-tested 2026-11-04: a practice trace read back from weft/db/frontier/DELTA/, no local file."
+    token :planner, :paid, "interactor-taskweft-persona (RECTGTN over JSON-LD) as a Lean library: the toolchain and planner Token 1's guests pay for, here as a host library"
+    token :erlang_node_in_lean, :not_spent, "Frontier/Dist.lean: EPMD ALIVE2, v6 handshake, pass-through ETF, REG_SEND in, SEND out. The ledger has no third token; retire or claim before a rung pins it. Boring substitute: a BEAM-side port or erl_interface C node."
+    token :md5_in_lean, :not_spent, "Frontier/Md5.lean, the handshake digest only; dies with :erlang_node_in_lean"
+    token :http_server, :paid, "Std.Http from the Lean toolchain"
+
+    # ---- boring technology
+    token :beam, :boring, "Elixir for build.exs, deploy/pod.exs, PropCheck in test/node; tools and gates only"
+    token :epmd, :boring, "Erlang's port mapper; runs beside the node in the pod from erlang:27-alpine"
+    token :c_shim, :boring, "one 60-line shim, c/sql.c"
+    token :elan_lake, :paid, "pinned by lean-toolchain"
+    token :k6, :boring, "deploy/k6.js, the challenge's thresholds"
+    token :cloud_init_systemd, :boring, "deploy/cloud-init.yaml"
+    token :almalinux_10_container, :boring, "Containerfile, two stages, FoundationDB client linked"
+    token :digitalocean_s_1vcpu_2gb, :boring, "the box, $12.00/mo; one box is one cell (deploy/pod.exs): fdb 0.45 cpu/1024 MiB, node 0.45/768, epmd 0.10/64, constant; more capacity is more cells"
+    token :github_actions, :boring, ".github/workflows/node.yml; blocked by billing on this private repo"
+    token :json_ld, :paid, "the domain, problem and plan documents"
+
+
+    # ---- language models and model images, as tokens
+    model :omnigen2_editscore7b_v1_1, :innovation, "image generation + edit with the EditScore head; stage 1 model and judge (2026-11-04)"
+    model :editscore_7b, :boring, "pairwise image-edit judge; the MaskScore/EditScore ladders; a gate"
+    model :llada_o, :not_spent, "diffusion LM image edit; beats OmniGen2 on one pair at 14x wall, n=1; parked"
+    model :trellis2, :innovation, "image to textured mesh, stage 2"
+    model :pixal3d, :innovation, "image to PBR mesh as a ggml-rd guest (RFD 2336); DINOv3 and BiRefNet HR paid with it"
+    model :skintokens_tokenrig, :innovation, "auto-rig, stage 4; first forward pass logged"
+    model :p3_sam, :innovation, "mesh segmentation, stage 5; Tencent licence review pending (replacement rescinded 2026-11-04)"
+    model :kimodo_motionbricks, :innovation, "text to motion and motion on ggml-rd, stage 7"
+    model :zipformer_sherpa_onnx, :boring, "streaming transducer on CPU, 5-10 ms per 160 ms chunk; phonemes to visemes, 2-frame EMA, 150-210 ms end to end; stage 8"
+    model :silero_vad, :boring, "speech gate ahead of Zipformer"
+    model :xls_r, :not_spent, "rejected for stage 8: bidirectional attention misses the 150 ms budget"
+    model :mfcc_viseme_gan_visemenet, :retired, "stage 8, replaced by Zipformer"
+    model :bonsai_27b, :boring, "language model; a serving target (bonsai-steamframe-vulkan, ninfer-bonsai-artifacts), not in the product"
+    model :qwen3_5_27b_turboquant, :boring, "language model; a local tool on this desk"
+    model :gemma_asr, :retired, "RFD 2180 dropped the gemma-auto track"
+    model :cyclegan_style_transfer, :retired, "stage 1, retired by the OmniGen2 decision"
+    model :see_through_ggml, :retired, "anime cel layer decomposition, stage 1, retired by the OmniGen2 decision"
+    model :persona_rectgtn, :paid, "not a model: the exact planner this repository serves"
+
+    # ---- the schema: the RECTGTN domain read as ReBAC definitions (verbs are the planner's actions)
+    definition :subject do
+      # character, prop, world
+    end
+    definition :token do
+      relation :acquired, :subject
+      permission :acquire, nil                      # action acquire-token-<repo>
+    end
+    definition :stage do
+      relation :owner, :subject
+      relation :requires, :stage
+      relation :draws_on, :token
+      relation :settled, :subject
+      permission :settle, {:and, {:arrow, :requires, :settled}, {:arrow, :draws_on, :acquired}}   # action settle-<subject>-N
+      permission :reach, {:or, :settled, :settle}                                                    # method reach-<subject>-N
+    end
+    definition :store do
+      relation :writer, :node
+      permission :record, :writer
+      permission :learn, :writer
+    end
+    definition :node do
+      relation :http_caller, :anyone          # loopback by default; no bearer token
+      relation :erlang_peer, :cookie_holder   # the distribution cookie
+      permission :plan, {:or, :http_caller, :erlang_peer}
+      permission :practice, {:or, :http_caller, :erlang_peer}
+      permission :experience, {:or, :http_caller, :erlang_peer}
+      permission :learn, {:or, :http_caller, :erlang_peer}   # gated: positive and negative control
+    end
+
+    # ---- subjects and stages, from knowledge/knowledge.json
+    subject :world, stages: ["1", "2", "4", "6", "7", "10"]
+    subject :prop, stages: ["1", "2", "4", "6", "7", "10"]
+    subject :character, stages: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
+    stage 1, :"look-dev", requires: [], draws_on: [:omnigen2_editscore7b_v1_1, :interactor_omnigen2_editscore_space]
+    stage 2, :"image-to-3d", requires: ["1"], draws_on: [:interactor_trellis2_image_to_textured_mesh, :contract_orbit_views]
+    stage 3, :"body", requires: ["2"], draws_on: [:interactor_anny_fit, :interactor_headfit, :contract_anny_kernels]
+    stage 4, :"gpu-skin", requires: ["3"], draws_on: [:interactor_skintokens_auto_rig, :interactor_skintokens_guest, :interactor_cage, :contract_ggml_rd]
+    stage 5, :"garments", requires: ["4"], draws_on: [:interactor_p3sam_mesh_segmentation, :interactor_remesh, :interactor_garment_fit, :interactor_cloth_fit_guest, :interactor_drape, :interactor_bake]
+    stage 6, :"look-render", requires: ["2", "5"], draws_on: [:interactor_slughorn, :thorvg]
+    stage 7, :"gpu-motion", requires: ["4"], draws_on: [:interactor_kimodo_text_to_motion, :interactor_motion_retarget, :interactor_motion_matching_guest]
+    stage 8, :"face-voice", requires: ["3", "4"], draws_on: [:interactor_headfit, :sherpa_onnx_zipformer, :interactor_voice, :silero_vad]
+    stage 9, :"persona", requires: ["8"], draws_on: [:interactor_taskweft_persona, :interactor_a2a, :weftspun_character_taxonomy]
+    stage 10, :"runtime", requires: ["6", "7", "8", "9"], draws_on: [:contract_ggml_rd, :contract_command, :interactor_usd_guest, :godot_vrm]
+
+    # ---- repository tokens the stages draw on (object, class, note)
+    token :contract_anny_kernels, :token_1, "Lean to Slang kernels"
+    token :contract_command, :token_1, "guest contract"
+    token :contract_ggml_rd, :token_1, "guest substrate"
+    token :contract_orbit_views, :boring, "standard"
+    token :godot_vrm, :boring, "stock addon"
+    token :interactor_a2a, :paid, "A2A library"
+    token :interactor_anny_fit, :token_1, "guest"
+    token :interactor_bake, :token_1, "guest"
+    token :interactor_cage, :token_1, "guest"
+    token :interactor_cloth_fit_guest, :token_1, "guest, GPU only"
+    token :interactor_drape, :token_1, "guest"
+    token :interactor_garment_fit, :token_1, "guest"
+    token :interactor_headfit, :token_1, "guest"
+    token :interactor_kimodo_text_to_motion, :innovation, "model image"
+    token :interactor_motion_matching_guest, :token_1, "guest"
+    token :interactor_motion_retarget, :paid, "Lean"
+    token :interactor_omnigen2_editscore_space, :boring, "static Space"
+    token :interactor_p3sam_mesh_segmentation, :innovation, "model image; licence review pending"
+    token :interactor_remesh, :token_1, "guest"
+    token :interactor_skintokens_auto_rig, :innovation, "model image"
+    token :interactor_skintokens_guest, :token_1, "guest"
+    token :interactor_slughorn, :innovation, "Slug vector renderer"
+    token :interactor_taskweft_persona, :paid, "planner"
+    token :interactor_trellis2_image_to_textured_mesh, :innovation, "model image"
+    token :interactor_usd_guest, :token_1, "guest"
+    token :interactor_voice, :token_1, "guest"
+    token :omnigen2_editscore7b_v1_1, :innovation, "image model, HF weights; replaces interactor-see-through-ggml"
+    token :sherpa_onnx_zipformer, :boring, "streaming Zipformer transducer on CPU; replaces mfcc-viseme-gan"
+    token :silero_vad, :boring, "speech gate ahead of the recognizer"
+    token :thorvg, :boring, "stock"
+    token :weftspun_character_taxonomy, :boring, "Elixir service"
+
+    # ---- the node and the store
+    tuple "store:sqlite-fdb", :writer, "node:frontier"
+    tuple "node:frontier", :http_caller, "anyone"                 # 127.0.0.1 by default; --host 0.0.0.0 in the container
+    tuple "node:frontier", :erlang_peer, "cookie_holder:*"        # --cookie, --cookie-file, or ~/.erlang.cookie
+
+    gap "http_caller is anyone, so learn and experience have no stronger guard than the socket"
+    gap "the Erlang side has one credential, the cookie"
+    gap "nothing distinguishes a reporter (the owning repository's CI) from a reader"
+  end
+end
+
+# ---- render: every stage tuple expands to object#verb@subject rows; a draws_on naming no token fails
+rows = Frontier.Tokens.rows()
+tokens = for {:token, n, _, _} <- rows, into: MapSet.new(), do: n
+stages = for {:stage, n, name, req, draws} <- rows, do: {n, name, req, draws}
+subjects = for {:subject, s, ss} <- rows, do: {s, ss}
+
+IO.puts("# tokens")
+for {:token, n, status, note} <- rows, do: IO.puts("token:#{n}  #{status}  #{note || ""}")
+IO.puts("\n# models")
+for {:model, n, status, note} <- rows, do: IO.puts("model:#{n}  #{status}  #{note}")
+IO.puts("\n# tuples")
+missing =
+  for {s, ss} <- subjects, {n, _name, req, draws} <- stages, Integer.to_string(n) in ss, reduce: [] do
+    acc ->
+      for r <- req, r in ss, do: IO.puts("stage:#{s}-#{n}#requires@stage:#{s}-#{r}")
+      for d <- draws, do: IO.puts("stage:#{s}-#{n}#draws_on@token:#{d}")
+      IO.puts("stage:#{s}-#{n}#owner@subject:#{s}")
+      acc ++ Enum.reject(draws, &MapSet.member?(tokens, &1))
+  end
+for {:tuple, o, v, s} <- rows, do: IO.puts("#{o}##{v}@#{s}")
+IO.puts("\n# gaps")
+for {:gap, g} <- rows, do: IO.puts("- #{g}")
+
+case Enum.uniq(missing) do
+  [] -> IO.puts("\nOK: every draws_on names a declared token")
+  m -> IO.puts(:stderr, "FAIL: draws_on without a token row: #{inspect(m)}"); System.halt(1)
+end
