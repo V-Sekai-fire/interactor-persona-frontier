@@ -1,0 +1,81 @@
+"@context":
+  VSEKAI: https://v-sekai.org/
+  domain: VSEKAI:planning/domain/
+"@type": domain:Plan
+domain: character_stack
+name: w_plan
+problem: w
+reached: true
+steps:
+  - action: acquire-token-omnigen2-editscore7b-v1.1
+    duration: PT0S
+    params: []
+  - action: acquire-token-interactor-see-through-ggml
+    duration: PT0S
+    params: []
+  - action: acquire-token-interactor-omnigen2-editscore-space
+    duration: PT0S
+    params: []
+  - action: settle-world-1
+    duration: PT0S
+    params: []
+  - action: acquire-token-interactor-trellis2-image-to-textured-mesh
+    duration: PT0S
+    params: []
+  - action: acquire-token-contract-orbit-views
+    duration: PT0S
+    params: []
+  - action: settle-world-2
+    duration: PT0S
+    params: []
+  - action: acquire-token-interactor-slughorn
+    duration: PT0S
+    params: []
+  - action: acquire-token-thorvg
+    duration: PT0S
+    params: []
+  - action: settle-world-6
+    duration: PT0S
+    params: []
+  - action: acquire-token-interactor-skintokens-auto-rig
+    duration: PT0S
+    params: []
+  - action: acquire-token-interactor-skintokens-guest
+    duration: PT0S
+    params: []
+  - action: acquire-token-interactor-cage
+    duration: PT0S
+    params: []
+  - action: acquire-token-contract-ggml-rd
+    duration: PT0S
+    params: []
+  - action: settle-world-4
+    duration: PT0S
+    params: []
+  - action: acquire-token-interactor-kimodo-text-to-motion
+    duration: PT0S
+    params: []
+  - action: acquire-token-interactor-motion-retarget
+    duration: PT0S
+    params: []
+  - action: acquire-token-interactor-motion-matching-guest
+    duration: PT0S
+    params: []
+  - action: settle-world-7
+    duration: PT0S
+    params: []
+  - action: acquire-token-contract-command
+    duration: PT0S
+    params: []
+  - action: acquire-token-interactor-usd-guest
+    duration: PT0S
+    params: []
+  - action: acquire-token-godot-vrm
+    duration: PT0S
+    params: []
+  - action: settle-world-10
+    duration: PT0S
+    params: []
+temporal:
+  consistent: true
+  total: PT0S
