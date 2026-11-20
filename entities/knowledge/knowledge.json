@@ -33,6 +33,13 @@
     "9",
     "10"
    ]
+  },
+  "look": {
+   "stages": [
+    "11",
+    "12",
+    "13"
+   ]
   }
  },
  "stages": {
@@ -152,6 +159,25 @@
    ],
    "requires": [],
    "name": "look-dev"
+  },
+  "11": {
+   "tokens": [],
+   "requires": [],
+   "name": "render"
+  },
+  "12": {
+   "tokens": [],
+   "requires": [
+    "11"
+   ],
+   "name": "judge"
+  },
+  "13": {
+   "tokens": [],
+   "requires": [
+    "12"
+   ],
+   "name": "report"
   }
  },
  "revision": 0,
