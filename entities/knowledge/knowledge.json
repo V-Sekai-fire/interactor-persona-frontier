@@ -33,6 +33,20 @@
     "9",
     "10"
    ]
+  },
+  "look": {
+   "stages": [
+    "11",
+    "12",
+    "13"
+   ]
+  },
+  "series": {
+   "stages": [
+    "14",
+    "15",
+    "16"
+   ]
   }
  },
  "stages": {
@@ -113,7 +127,8 @@
    "tokens": [
     "interactor-anny-fit",
     "interactor-headfit",
-    "contract-anny-kernels"
+    "contract-anny-kernels",
+    "sinew-mocap-measure"
    ],
    "requires": [
     "2"
@@ -152,6 +167,44 @@
    ],
    "requires": [],
    "name": "look-dev"
+  },
+  "11": {
+   "tokens": [],
+   "requires": [],
+   "name": "render"
+  },
+  "12": {
+   "tokens": [],
+   "requires": [
+    "11"
+   ],
+   "name": "judge"
+  },
+  "13": {
+   "tokens": [],
+   "requires": [
+    "12"
+   ],
+   "name": "report"
+  },
+  "14": {
+   "tokens": [],
+   "requires": [],
+   "name": "sweep-render"
+  },
+  "15": {
+   "tokens": [],
+   "requires": [
+    "14"
+   ],
+   "name": "sweep-judge"
+  },
+  "16": {
+   "tokens": [],
+   "requires": [
+    "15"
+   ],
+   "name": "sweep-report"
   }
  },
  "revision": 0,
