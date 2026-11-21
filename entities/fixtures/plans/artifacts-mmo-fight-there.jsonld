@@ -1,0 +1,1 @@
+{"@context":{"VSEKAI":"https://v-sekai.org/","domain":"VSEKAI:planning/domain/"},"@type":"domain:Plan","domain":"artifacts_mmo","name":"artifacts_mmo_fight_there_plan","problem":"artifacts_mmo_fight_there","reached":true,"steps":[{"action":"fight","duration":"PT5S","params":["1","2","0"]}],"temporal":{"consistent":true,"total":"PT5S"}}
