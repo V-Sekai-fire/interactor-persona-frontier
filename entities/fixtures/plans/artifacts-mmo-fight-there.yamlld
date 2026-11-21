@@ -11,7 +11,7 @@ steps:
     duration: PT5S
     params:
       - c1
-      - chickens
+      - chicken_0_1
 temporal:
   consistent: true
   total: PT5S
