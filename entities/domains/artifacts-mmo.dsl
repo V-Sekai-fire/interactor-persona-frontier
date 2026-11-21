@@ -97,13 +97,24 @@ action cancel-task(c: char, place: tile)  calls action_task_cancel
   need task(c) >= 1
   set task(c) = 0
 
-method go-to(c: char, place: tile)
+# A todo list names one method, never an action: every action is wrapped by exactly one method (wraps), and a method that wraps
+# nothing calls methods only.
+method go-to(c: char, place: tile)  wraps move
   there: when at(c) = place
   move: -> move(c, place)
 
-method heal(c: char)
+method heal(c: char)  wraps rest
   full: when hp_full(c) = 1
   rest: -> rest(c)
 
-# each of these actions also gets a method <action>-at: go to the place, then act
+method wear(c: char, item: item, slot: slot)  wraps equip
+  put-on: -> equip(c, item, slot)
+
+method take-off(c: char, slot: slot)  wraps unequip
+  remove: -> unequip(c, slot)
+
+method consume(c: char, item: item, quantity)  wraps use
+  eat: -> use(c, item, quantity)
+
+# each of these actions also gets a wrapper <action>-at: go to the place, then act
 at-place fight gather craft recycle deposit-item deposit-gold withdraw-item withdraw-gold buy sell new-task complete-task cancel-task
