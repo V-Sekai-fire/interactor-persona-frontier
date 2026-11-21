@@ -11,12 +11,12 @@ steps:
     duration: PT5S
     params:
       - c1
-      - copper_rocks
+      - copper_rocks_2_0
   - action: gather
     duration: PT5S
     params:
       - c1
-      - copper_rocks
+      - copper_rocks_2_0
       - mining
       - "1"
       - copper_ore

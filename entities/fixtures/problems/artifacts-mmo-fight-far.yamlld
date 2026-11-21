@@ -13,7 +13,7 @@ capabilities:
 todo_list:
   - - fight-at
     - char.c1
-    - tile.chickens
+    - tile.chicken_0_1
 variables:
   - init:
       "1": 1
