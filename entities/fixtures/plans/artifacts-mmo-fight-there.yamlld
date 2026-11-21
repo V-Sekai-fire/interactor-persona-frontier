@@ -10,9 +10,8 @@ steps:
   - action: fight
     duration: PT5S
     params:
-      - "1"
-      - "2"
-      - "0"
+      - c1
+      - chickens
 temporal:
   consistent: true
   total: PT5S
