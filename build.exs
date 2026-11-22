@@ -2,9 +2,8 @@
 # One command, no arguments: a fresh clone builds the node and its gates and runs them.
 #   elixir build.exs
 # Installs what is missing through brew (macOS) or apt (Debian/Ubuntu): elan (the Lean toolchain
-# named in lean-toolchain), SQLite headers, Erlang and Elixir's epmd, a C compiler. Then: lake build,
-# the Lean witness, and the PropCheck suite against a node started on scratch ports with its own
-# SQLite file. FoundationDB is not installed here; the FDB-backed run is deploy/cloud-init.yaml and
+# named in lean-toolchain), SQLite headers, Erlang and Elixir, a C compiler. Then: lake build,
+# the Lean witness, and the StreamData suite that calls the planner in-process through leanler. FoundationDB is not installed here; the FDB-backed run is deploy/cloud-init.yaml and
 # .github/workflows/node.yml. Every step returns {:ok, _} or {:error, reason}; the first error exits.
 defmodule Build do
   @root Path.expand(__DIR__)
@@ -42,43 +41,23 @@ defmodule Build do
     if File.exists?(header), do: {:ok, header}, else: need("__sqlite_headers__", "sqlite", "libsqlite3-dev")
   end
 
-  def wait_registered(0), do: {:error, "the node did not register with epmd within 30 s"}
-  def wait_registered(n) do
-    case System.cmd("epmd", ["-names"], stderr_to_stdout: true) do
-      {out, 0} when is_binary(out) -> if out =~ "name frontier at port 9951", do: {:ok, :registered}, else: (Process.sleep(1000); wait_registered(n - 1))
-      _ -> Process.sleep(1000); wait_registered(n - 1)
+  # the planner in-process through leanler: the StreamData suite and its controls
+  def planner_suite do
+    with {:ok, _} <- run("mix", ["deps.get"]),
+         {:ok, _} <- run("mix", ["test"]) do
+      {:ok, :planner_suite}
     end
-  end
-
-  # the node under test: scratch ports, a scratch database, a random cookie; killed when done
-  def propcheck do
-    db = Path.join(System.tmp_dir!(), "frontier-build-#{System.unique_integer([:positive])}.sqlite")
-    cookie = :crypto.strong_rand_bytes(18) |> Base.url_encode64(padding: false)
-    _ = System.cmd("epmd", ["-daemon"])
-    port = Port.open({:spawn_executable, Path.join(@root, ".lake/build/bin/frontier")},
-      [:binary, :exit_status, args: ["--port", "9950", "--dist-port", "9951", "--cookie", cookie], env: [{~c"FRONTIER_DB", String.to_charlist(db)}], cd: @root])
-    {:os_pid, os_pid} = Port.info(port, :os_pid)
-    result =
-      with {:ok, _} <- wait_registered(30),
-           {:ok, _} <- run("mix", ["deps.get"], cd: Path.join(@root, "transports/spec/node")),
-           {:ok, _} <- run("elixir", ["--name", "probe@127.0.0.1", "--cookie", cookie, "-S", "mix", "test"], cd: Path.join(@root, "transports/spec/node")) do
-        {:ok, :propcheck}
-      end
-    System.cmd("kill", [Integer.to_string(os_pid)])
-    File.rm(db)
-    result
   end
 
   def main do
     steps = [
       fn -> elan() end,
       fn -> need("erl", "erlang", "erlang-dev") end,
-      fn -> need("epmd", "erlang", "erlang-epmd") end,
       fn -> need("cc", "gcc", "build-essential") end,
       fn -> run("lake", ["build"]) end,
       fn -> run(Path.join(@root, ".lake/build/bin/frontier_witness"), []) end,
       fn -> run("elixir", ["docs/tokens.exs"]) end,
-      fn -> propcheck() end
+      fn -> planner_suite() end
     ]
     Enum.reduce_while(steps, {:ok, :start}, fn step, _ ->
       case step.() do

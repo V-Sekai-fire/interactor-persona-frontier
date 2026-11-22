@@ -1,20 +1,19 @@
 import Std.Http
 import Frontier.Loop
-import Frontier.Dist
 /-!
 # frontier: the $12-server build.
 
 One process, one box, no dependencies beyond SQLite: the planner is a library, the store is
 SQLite (pages in FoundationDB when datasource-store's VFS is loaded), the HTTP/1.1 A2A server
-is `Std.Http`, and the Erlang node is `Frontier.Dist`. The challenge (Arjay McCandless, "How Many
+is `Std.Http`. The challenge (Arjay McCandless, "How Many
 Users Can a $12 Server Handle?"): 1 vCPU, 2 GB, everything on the machine, k6 virtual users until
 p95 passes 500 ms, p99 passes 1 s or more than 1 % of requests fail.
 
     elixir build.exs                                              one command: deps, lake build, witness, PropCheck
-    frontier --port 9920 --dist-port 9930 --cookie <cookie>      (or --cookie-file <path>; --host 0.0.0.0 in a container, --node-host <addr peers dial>)
+    frontier --port 9920                                          (--host 0.0.0.0 in a container)
 
 The box is DigitalOcean's `s-1vcpu-2gb` Basic Droplet ($12.00/mo, $0.01786/hr), and one box is one cell:
-FoundationDB, epmd and this node colocated in one pod with constant shares (`deploy/pod.exs up|smoke|down`).
+FoundationDB and this node colocated in one pod with constant shares (`deploy/pod.exs up|smoke|down`).
 More capacity is more cells. `deploy/cloud-init.yaml` builds the box.
 
 | Route | Answer |
@@ -26,8 +25,7 @@ More capacity is more cells. `deploy/cloud-init.yaml` builds the box.
 | `POST /experience` | an experience report from a real stage run |
 | `POST /learn` | fold experience into knowledge through the gate |
 
-The same six answers over the Erlang node, as message text: a goal, `frontier`, `practice`,
-`learn`, or `experience {json}`.
+In an Elixir program the planner answers in-process through leanler (`Frontier.plan/2`), with no node and no port.
 -/
 open Lean Std Http Async Frontier
 
@@ -40,7 +38,7 @@ def card (url : String) : Json :=
       ("description", "Send a goal as text: reach-<subject>-N (character, prop, world), a subject alone, a stage name alone, or empty."),
       ("examples", Json.arr #["reach-character-10", "world", "prop 7", "garments"])]])]
 
-/-- Every command, one function, so HTTP and the Erlang node answer alike. -/
+/-- Every command, one function. -/
 def command (text : String) : IO Json := do
   let k ← Db.knowledge
   let t := text.trimAscii.toString
@@ -106,23 +104,11 @@ def main (args : List String) : IO UInt32 := do
   let host := (option args "--host").getD "127.0.0.1"
   let some ip := parseIPv4 host | IO.eprintln s!"frontier: --host must be an IPv4 address, got '{host}'"; return 2
   let port := ((option args "--port").bind String.toNat?).getD 9920
-  let distPort := ((option args "--dist-port").bind String.toNat?).getD 9930
-  let cookie ← match option args "--cookie", option args "--cookie-file" with
-    | some c, _ => pure c
-    | none, some f => pure (← IO.FS.readFile f).trimAscii.toString
-    | none, none => do
-      let home := (← IO.getEnv "HOME").getD "."
-      let p : System.FilePath := home / ".erlang.cookie"
-      if ← p.pathExists then pure (← IO.FS.readFile p).trimAscii.toString else pure "frontier"
   Db.init
   let _ ← Db.knowledge
   let url := s!"http://{host}:{port}/"
   IO.println s!"frontier on {url} (HTTP/1.1), db {← Db.url}"
   (← IO.getStdout).flush
-  let answer (t : String) : IO String := do return (← command t).compress
-  -- the node's name carries the address a peer dials, which is not the bind address in a container
-  let nodeHost := (option args "--node-host").getD (if host == "0.0.0.0" then "127.0.0.1" else host)
-  let _ ← IO.asTask (Async.block (Dist.run answer { host := nodeHost, ip, port := distPort.toUInt16, cookie }))
   Async.block do
     let server ← Server.serve (.v4 ⟨ip, port.toUInt16⟩) (handler url) { maxBodySize := 1048576 }
     server.waitShutdown

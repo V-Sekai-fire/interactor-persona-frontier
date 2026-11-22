@@ -5,3 +5,8 @@ domains/.broken.jsonld
 frontier.sqlite
 .lake/
 /tmp/
+
+/_build/
+/deps/
+/priv/
+/mix.lock.bak

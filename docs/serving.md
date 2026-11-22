@@ -51,7 +51,7 @@ before the Python path is removed). Until then both exist and the Python image i
 
 | where | what runs | box |
 | --- | --- | --- |
-| the cell ($12 droplet or a ~€4 Hetzner cell) | planner node + FoundationDB + epmd, constant shares | no GPU, no weights |
+| the cell ($12 droplet or a ~€4 Hetzner cell) | planner node + FoundationDB, constant shares | no GPU, no weights |
 | the authoring GPU (4090 desk today) | Bonsai 2 resident (7.2 GB), stage 1 generator rotated in (15.4 GB bf16), judge calls | 24 GB; stage 1 at bf16 with the resident judge is 24.6 GB, so the VL-3B goes 4-bit or activations tighten |
 | the player's GPU | stages 4, 5, 7, 8, 10 as guests, rotated per stage | Kimodo 4-bit (4.3 GB) is the ceiling; everything else under 2 GB |
 | a rented GPU cell (RunPod serverless, allowed since 2026-11-04) | overflow of the authoring GPU only: stage 1 generation and the full-bench judge runs | per-second; never a player's path |

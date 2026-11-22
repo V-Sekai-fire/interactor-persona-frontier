@@ -1,15 +1,14 @@
 #!/usr/bin/env elixir
-# One cell: FoundationDB + epmd + the node, colocated in one pod, sized to one s-1vcpu-2gb.
+# One cell: FoundationDB + the node, colocated in one pod, sized to one s-1vcpu-2gb.
 #   elixir deploy/pod.exs up [name]      elixir deploy/pod.exs down [name]     elixir deploy/pod.exs smoke [name]
-# The box is 1 vCPU and 2 GB; the three containers get constant shares of it that sum to the box,
+# The box is 1 vCPU and 2 GB; the two containers get constant shares of it, with the rest left as headroom,
 # so load on one never starves another and a second box is a second cell, never a bigger one:
 #   fdbserver   0.45 cpu   1024 MiB   (storage_memory 512 MiB inside; the memory engine)
 #   frontier    0.45 cpu    768 MiB
-#   epmd        0.10 cpu     64 MiB
+#   headroom    0.10 cpu     64 MiB   (the port mapper had it; the node no longer needs one, and the shares were not re-sized)
 # More capacity is more cells, each with its own FoundationDB and its own node; nothing is shared.
 defmodule Cell do
   @fdb "docker.io/foundationdb/foundationdb:7.3.63"
-  @erlang "docker.io/library/erlang:27-alpine"
   @image System.get_env("FRONTIER_IMAGE", "localhost/frontier:alma10")
 
   def run(args) do
@@ -34,11 +33,10 @@ defmodule Cell do
          _ <- Process.sleep(6000),
          {:ok, _} <- run(["exec", "#{name}-fdb", "fdbcli", "--exec", "configure new single memory", "--timeout", "30"]),
          {:ok, _} <- ready(name, 30),
-         {:ok, _} <- run(["run", "-d", "--pod", name, "--name", "#{name}-epmd", "--cpus", "0.10", "--memory", "64m", @erlang, "epmd", "-d"]),
          {:ok, _} <- run(["run", "-d", "--pod", name, "--name", "#{name}-node", "--cpus", "0.45", "--memory", "768m", "-v", "#{name}-data:/data",
                           "-e", "FRONTIER_DB=file:frontier?vfs=weft_fdb", "-e", "WEFT_FDB_CLUSTER_FILE=/data/fdb.cluster",
                           "--entrypoint", "sh", @image, "-c",
-                          "echo docker:docker@127.0.0.1:4500 > /data/fdb.cluster; [ -f /data/cookie ] || head -c 24 /dev/urandom | base64 > /data/cookie; exec /app/frontier --host 0.0.0.0 --port 9920 --dist-port 9930 --cookie-file /data/cookie"]) do
+                          "echo docker:docker@127.0.0.1:4500 > /data/fdb.cluster; exec /app/frontier --host 0.0.0.0 --port 9920"]) do
       {:ok, "cell #{name} up: http :#{http_port}, FoundationDB and the node in one pod"}
     end
   end
