@@ -60,13 +60,19 @@ LEAN_EXPORT lean_obj_res frontier_sql(b_lean_obj_arg db_s, b_lean_obj_arg sql_s)
     if (g_fdb_rc != SQLITE_OK) { sb_str(&s, "{\"error\":\"weft_fdb did not start (WEFT_FDB_CLUSTER_FILE unset or cluster unreachable)\"}"); goto out; }
   }
 #endif
-  int rc = sqlite3_open_v2(db, &h, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_URI, NULL);
-  if (rc != SQLITE_OK) { sb_str(&s, "{\"error\":"); sb_json(&s, h ? sqlite3_errmsg(h) : "open"); sb_str(&s, "}"); goto out; }
+  // The extension registers the VFS for the whole process, so it is loaded through a scratch connection
+  // before the database is opened: a URI naming vfs=weft_fdb fails with "no such vfs" if it is opened first.
   const char *ext = getenv("FRONTIER_VFS_EXT");
   if (ext && *ext) {
-    sqlite3_enable_load_extension(h, 1);
-    if (sqlite3_load_extension(h, ext, NULL, &err) != SQLITE_OK) { sb_str(&s, "{\"error\":"); sb_json(&s, err ? err : "load_extension"); sb_str(&s, "}"); sqlite3_free(err); goto out; }
+    sqlite3 *x = NULL;
+    if (sqlite3_open_v2(":memory:", &x, SQLITE_OPEN_READWRITE | SQLITE_OPEN_MEMORY, NULL) != SQLITE_OK) { sb_str(&s, "{\"error\":\"open scratch\"}"); sqlite3_close(x); goto out; }
+    sqlite3_enable_load_extension(x, 1);
+    int lr = sqlite3_load_extension(x, ext, NULL, &err);
+    sqlite3_close(x);
+    if (lr != SQLITE_OK) { sb_str(&s, "{\"error\":"); sb_json(&s, err ? err : "load_extension"); sb_str(&s, "}"); sqlite3_free(err); goto out; }
   }
+  int rc = sqlite3_open_v2(db, &h, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_URI, NULL);
+  if (rc != SQLITE_OK) { sb_str(&s, "{\"error\":"); sb_json(&s, h ? sqlite3_errmsg(h) : "open"); sb_str(&s, "}"); goto out; }
   sqlite3_busy_timeout(h, 5000);
   if (strstr(db, "vfs=weft_fdb")) sqlite3_exec(h, "PRAGMA journal_mode=MEMORY; PRAGMA locking_mode=EXCLUSIVE;", NULL, NULL, NULL);
   sb_str(&s, "{\"rows\":[");

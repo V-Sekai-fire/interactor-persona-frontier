@@ -1,7 +1,7 @@
-# One $12-server box: FoundationDB, the store's VFS, the Lean node, an Elixir peer. The Lean
-# witness is the unit gate; the PropCheck suite drives the node over the Erlang distribution
-# with its pages in FoundationDB; the last step reads those pages back from fdbcli, so a run that
-# quietly fell back to a local file fails.
+# One $12-server box: FoundationDB, the store's VFS, the Lean node. The Lean witness is the unit
+# gate; the StreamData suite calls the planner in-process through leanler; the node answers an
+# A2A request with its pages in FoundationDB, and the last step reads those pages back from
+# fdbcli, so a run that quietly fell back to a local file fails.
 name: node
 
 on:
@@ -15,7 +15,6 @@ jobs:
     timeout-minutes: 40
     env:
       STORE_VERSION: abb688b70be3dc160c2cf5f32ff7d8e05da799ba
-      COOKIE: ci-frontier
     steps:
       - uses: actions/checkout@v4
 
@@ -51,7 +50,7 @@ jobs:
       - run: |
           cmake -S datasource-store -B datasource-store/build -DCMAKE_BUILD_TYPE=Release
           cmake --build datasource-store/build --target weftfdb -j
-          ls -la datasource-store/build/libweftfdb.so
+          ls -la datasource-store/build/weftfdb.so
 
       - name: Lean toolchain from lean-toolchain
         run: |
@@ -67,25 +66,22 @@ jobs:
       - name: The node, pages in FoundationDB
         env:
           FRONTIER_DB: file:frontier?vfs=weft_fdb
-          FRONTIER_VFS_EXT: ${{ github.workspace }}/datasource-store/build/libweftfdb
+          FRONTIER_VFS_EXT: ${{ github.workspace }}/datasource-store/build/weftfdb
           WEFT_FDB_CLUSTER_FILE: /etc/foundationdb/fdb.cluster
         run: |
-          epmd -daemon
-          nohup ./.lake/build/bin/frontier --port 9920 --dist-port 9930 --cookie "$COOKIE" > frontier.log 2>&1 &
-          for i in $(seq 1 30); do grep -q "registered with epmd" frontier.log && break; sleep 1; done
+          nohup ./.lake/build/bin/frontier --port 9920 > frontier.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf localhost:9920/.well-known/agent-card.json >/dev/null && break; sleep 1; done
           cat frontier.log
-          epmd -names | grep "name frontier at port 9930"
           curl -sf -X POST localhost:9920/ -d '{"jsonrpc":"2.0","id":1,"method":"message/send","params":{"message":{"role":"user","parts":[{"text":"world"}]}}}' | head -c 300; echo
 
-      - name: PropCheck through the Erlang distribution
-        working-directory: test/node
+      - name: The planner in-process through leanler
         run: |
           mix deps.get
-          elixir --name probe@127.0.0.1 --cookie "$COOKIE" -S mix test
+          mix test
 
       - name: The pages are in FoundationDB, not a local file
         run: |
           test ! -e frontier.sqlite
           fdbcli --exec "getrange weft/db/frontier/ weft/db/frontier0 20" --timeout 10 | tee fdb-keys.txt
           grep -q 'weft/db/frontier/HEAD' fdb-keys.txt
-          grep -q '"kind":"practice"' fdb-keys.txt
+          grep -q '"kind":"request"' fdb-keys.txt

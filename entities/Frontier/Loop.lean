@@ -1,6 +1,8 @@
 import Frontier.Gen
 import Persona.Jsonld
 import Frontier.Db
+import Frontier.Answer
+import YamlLd
 /-!
 # The frontier loop: plan, levels, practice, experience, learn with its gate.
 A level is (subject, goal position, held prefix) over that subject's own stage list. Level search
@@ -10,46 +12,6 @@ only truth; learning folds them into the knowledge file and lands a revision onl
 namespace Frontier.Loop
 
 open Lean Frontier
-
-def dropN (s : String) (n : Nat) : String := (s.toSubstring.drop n).toString
-
-def planText (k : Knowledge) (problem : Json) : String :=
-  Persona.Jsonld.planOf (Gen.domain k).compress problem.compress
-
-def planJson (k : Knowledge) (problem : Json) : Json :=
-  (Json.parse (planText k problem)).toOption.getD (Json.mkObj [("refused", "bad_plan")])
-
-def settled (plan : Json) : List String :=
-  (strsOf (field plan "steps")).filter (·.startsWith "settle-")
-where strsOf (j : Json) : List String := ((j.getArr?).toOption.getD #[]).toList.map fun s => str (field s "action")
-
-def reached (plan : Json) : Bool := (field plan "reached").getBool?.toOption.getD false
-
-/-- `reach-<subject>-N`, `<subject> N`, `<subject>` (its last stage), a stage number or stage name
-(the character's), or empty (the character's last stage). -/
-def goalOf (k : Knowledge) (text : String) : Option (String × String) := do
-  let subs := subjects k
-  let t := text.trimAscii.toString.toLower
-  let stageOf (w : String) : Option String :=
-    if (stageIds k).contains w then some w
-    else (obj (field k "stages")).find? (fun (_, v) => str (field v "name") == w) |>.map (·.1)
-  let (subj, rest) :=
-    match t.splitOn " " with
-    | [a, b] => if (subs.lookup a).isSome then (a, b) else ("character", t)
-    | [a] =>
-      let a' := if a.startsWith "reach-" then dropN a 6 else a
-      match a'.splitOn "-" with
-      | [s, n] => if (subs.lookup s).isSome then (s, n) else ("character", a')
-      | _ => if (subs.lookup a').isSome then (a', "") else ("character", a')
-    | _ => ("character", t)
-  let stages ← subs.lookup subj
-  let n ← if rest == "" then stages.getLast? else stageOf rest
-  if stages.contains n then pure (subj, n) else none
-
-def answer (k : Knowledge) (text : String) : Json :=
-  match goalOf k text with
-  | none => Json.mkObj [("refused", "undeclared_goal")]
-  | some (s, n) => planJson k (Gen.problem k "request" [] [] s!"reach-{s}-{n}")
 
 def record (t : Json) : IO Unit := Db.insertTrace (str (field t "kind")) t
 
@@ -158,8 +120,8 @@ def learn (k : Knowledge) : IO Json := do
   if pass then
     Db.putKnowledge k2
     IO.FS.writeFile "entities/knowledge/knowledge.json" (k2.pretty ++ "\n")
-    IO.FS.writeFile "entities/fixtures/domains/character-stack.jsonld" (Gen.domain k2).compress
-    IO.FS.writeFile "entities/fixtures/plans/character-stack-cold.jsonld" (gold.compress ++ "\n")
+    IO.FS.writeFile "entities/fixtures/domains/character-stack.yamlld" (YamlLd.render (Gen.domain k2))
+    IO.FS.writeFile "entities/fixtures/plans/character-stack-cold.yamlld" (YamlLd.render gold)
   return Json.mkObj [("revision", if pass then field k2 "revision" else field k "revision"), ("gate", g),
     ("requires", Json.mkObj ((stageIds k2).map fun n => (n, Json.arr ((requiresOf k2 n).map Json.str).toArray))), ("durations", field k2 "durations")]
 

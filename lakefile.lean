@@ -7,6 +7,9 @@ package «frontier» where
 -- The planner and its JSON-LD domain reader, as a library.
 require persona from git "https://github.com/V-Sekai-fire/interactor-taskweft-persona" @ "main"
 
+-- YAML-LD in and out: the fixtures and domains in entities/ are .yamlld only.
+require «lean-yaml-ld» from git "https://github.com/V-Sekai-fire/lean-yaml-ld" @ "main"
+
 -- `lake build -Kfdb=/usr/lib64/libfdb_c.so` links datasource-store's weft_fdb VFS in directly.
 def fdbLib : Option String := get_config? fdb
 
@@ -46,34 +49,30 @@ extern_lib libfrontier_sql pkg := do
   let objs ← if fdbLib.isSome then do let f ← fetch <| pkg.target ``fdb_vfs.o; pure #[a, b, f] else pure #[a, b]
   buildStaticLib (pkg.staticLibDir / name) objs
 
--- The hexagon: entities is the pure core (domain generation, the frontier loop, the codecs) and
+-- The hexagon: entities is the pure core (domain generation, the frontier loop) and
 -- its spec; repositories is the store port; datasources the C under it; transports the HTTP server
--- and the Erlang node that call the core. Dependencies point inward only.
+-- that calls the core. Dependencies point inward only.
 lean_lib «Entities» where
   srcDir := "entities"
-  roots := #[`Frontier.Gen, `Frontier.Loop, `Frontier.Etf, `Frontier.Md5]
+  roots := #[`Frontier.Gen, `Frontier.Answer, `Frontier.Loop, `Frontier.Guest]
 
 lean_lib «Repositories» where
   srcDir := "repositories"
   roots := #[`Frontier.Db]
 
-lean_lib «Transports» where
-  srcDir := "transports"
-  roots := #[`Frontier.Dist]
-
 -- SQLite is vendored and compiled in; only libdl and libm are needed beside it on Linux.
 def sqliteLink : Array String :=
   (if System.Platform.isOSX then #[] else #["-ldl", "-lm", "-lpthread"]) ++ (fdbLib.map (#[·])).getD #[]
 
--- The server: HTTP/1.1 A2A on --port, and an Erlang distribution node on --dist-port.
+-- The server: HTTP/1.1 A2A on --port.
 @[default_target]
 lean_exe «frontier» where
   srcDir := "transports"
   root := `Main
   moreLinkArgs := sqliteLink
 
--- The green gate: the domain plans cold for every subject, the learn gate holds, MD5 and ETF
--- round-trip, and a planted fault fails each.
+-- The green gate: the domain plans cold for every subject, the learn gate holds, and a planted
+-- fault fails each.
 @[default_target]
 lean_exe «frontier_witness» where
   srcDir := "entities/spec"

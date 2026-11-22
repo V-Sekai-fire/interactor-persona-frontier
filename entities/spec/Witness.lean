@@ -1,5 +1,4 @@
 import Frontier.Loop
-import Frontier.Dist
 /-!
 # The green gate. Every invariant has a positive and a negative control; exit 0 and `OK:` when all hold.
 -/
@@ -15,14 +14,6 @@ def main : IO UInt32 := do
   Db.override.set (some dbp.toString)
   let k ← match Json.parse (← IO.FS.readFile "entities/knowledge/knowledge.json") with | .ok k => pure k | .error e => throw (IO.userError e)
   let mut ok := true
-  -- MD5 against RFC 1321 vectors, and a planted fault
-  ok := (← check "md5 empty" (Md5.hex (Md5.digest "".toUTF8) == "d41d8cd98f00b204e9800998ecf8427e")) && ok
-  ok := (← check "md5 abc" (Md5.hex (Md5.digest "abc".toUTF8) == "900150983cd24fb0d6963f7d28e17f72")) && ok
-  ok := (← check "md5 planted fault fails" (Md5.hex (Md5.digest "abd".toUTF8) != "900150983cd24fb0d6963f7d28e17f72")) && ok
-  -- ETF round trip and a truncated term
-  let t : Etf.Term := .tuple #[.int 6, .atom "", .bin "world".toUTF8, .list #[.int 1, .int 300], .nil]
-  ok := (← check "etf round trip" ((Etf.unpack (Etf.pack t) 0).toOption.map (toString ·.1) == some (toString t))) && ok
-  ok := (← check "etf truncated fails" ((Etf.unpack ((Etf.pack t).extract 0 6) 0).toOption.isNone)) && ok
   -- the domain plans cold for every subject, each with its own stage count
   for (s, ns) in subjects k do
     let plan := Loop.planJson k (Gen.problem k "cold" [] [] s!"reach-{s}-{ns.getLast!}")

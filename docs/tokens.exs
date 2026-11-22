@@ -42,19 +42,17 @@ defmodule Frontier.Tokens do
     # ---- innovation tokens: substrates this repository runs on
     token :store, :token_2, "SQLite (vendored amalgamation) through datasources/sqlite/sql.c; datasource-store's fdb_vfs.c linked in with -Kfdb, pages in FoundationDB. Smoke-tested 2026-11-04: a practice trace read back from weft/db/frontier/DELTA/, no local file."
     token :planner, :paid, "interactor-taskweft-persona (RECTGTN over JSON-LD) as a Lean library: the toolchain and planner Token 1's guests pay for, here as a host library"
-    token :erlang_node_in_lean, :not_spent, "transports/Frontier/Dist.lean: EPMD ALIVE2, v6 handshake, pass-through ETF, REG_SEND in, SEND out. The ledger has no third token; retire or claim before a rung pins it. Boring substitute: a BEAM-side port or erl_interface C node."
     token :the_one_release, :not_spent, "one tag that carries engine, every guest ELF, every GGUF, the Bonsai 2 service and the planner node under one SHA256SUMS (docs/release.md). Today: ninfer-all windows-service-v1.0.0 (15 assets), transport-meshing-pen v20261002-dev.2 (11 assets, five guests), model-explorer (1 DMG), and twelve guest/model repositories with no release. This is the R&D; serving Bonsai 2 is done."
-    token :md5_in_lean, :not_spent, "entities/Frontier/Md5.lean, the handshake digest only; dies with :erlang_node_in_lean"
+    token :leanler_in_process, :not_spent, "leanler NIF (V-Sekai-fire/leanler): Frontier.Guest exports frontier_answer_text, and Frontier.plan/2 in lib/ calls it in the caller's VM. Plan only: the export is pure, so practice, experience and learn stay on HTTP. Replaced the Erlang node in Lean."
     token :http_server, :paid, "Std.Http from the Lean toolchain"
 
     # ---- boring technology
-    token :beam, :boring, "Elixir for build.exs, deploy/pod.exs, PropCheck in transports/spec/node; tools and gates only"
-    token :epmd, :boring, "Erlang's port mapper; runs beside the node in the pod from erlang:27-alpine"
+    token :beam, :boring, "Elixir for build.exs, deploy/pod.exs, StreamData in test/; tools and gates only"
     token :c_shim, :boring, "one 60-line shim, datasources/sqlite/sql.c"
     token :elan_lake, :paid, "pinned by lean-toolchain"
     token :cloud_init_systemd, :boring, "deploy/cloud-init.yaml"
     token :almalinux_10_container, :boring, "Containerfile, two stages, FoundationDB client linked"
-    token :digitalocean_s_1vcpu_2gb, :boring, "the box, $12.00/mo; one box is one cell (deploy/pod.exs): fdb 0.45 cpu/1024 MiB, node 0.45/768, epmd 0.10/64, constant; more capacity is more cells"
+    token :digitalocean_s_1vcpu_2gb, :boring, "the box, $12.00/mo; one box is one cell (deploy/pod.exs): fdb 0.45 cpu/1024 MiB, node 0.45/768, constant (0.10/64 left as headroom); more capacity is more cells"
     token :github_actions, :boring, ".github/workflows/node.yml; blocked by billing on this private repo"
     token :json_ld, :paid, "the domain, problem and plan documents"
 
@@ -104,11 +102,11 @@ defmodule Frontier.Tokens do
     end
     definition :node do
       relation :http_caller, :anyone          # loopback by default; no bearer token
-      relation :erlang_peer, :cookie_holder   # the distribution cookie
-      permission :plan, {:or, :http_caller, :erlang_peer}
-      permission :practice, {:or, :http_caller, :erlang_peer}
-      permission :experience, {:or, :http_caller, :erlang_peer}
-      permission :learn, {:or, :http_caller, :erlang_peer}   # gated: positive and negative control
+      relation :in_process_caller, :same_vm   # leanler: Frontier.plan/2 in the caller's own VM
+      permission :plan, {:or, :http_caller, :in_process_caller}
+      permission :practice, :http_caller
+      permission :experience, :http_caller
+      permission :learn, :http_caller   # gated: positive and negative control
     end
 
     # ---- subjects and stages, from entities/knowledge/knowledge.json
@@ -163,10 +161,9 @@ defmodule Frontier.Tokens do
     # ---- the node and the store
     tuple "store:sqlite-fdb", :writer, "node:frontier"
     tuple "node:frontier", :http_caller, "anyone"                 # 127.0.0.1 by default; --host 0.0.0.0 in the container
-    tuple "node:frontier", :erlang_peer, "cookie_holder:*"        # --cookie, --cookie-file, or ~/.erlang.cookie
+    tuple "node:frontier", :in_process_caller, "same_vm:*"        # Frontier.plan/2; plan only, no store
 
     gap "http_caller is anyone, so learn and experience have no stronger guard than the socket"
-    gap "the Erlang side has one credential, the cookie"
     gap "nothing distinguishes a reporter (the owning repository's CI) from a reader"
   end
 end

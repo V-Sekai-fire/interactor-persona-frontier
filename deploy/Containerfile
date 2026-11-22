@@ -1,15 +1,11 @@
 # The node on AlmaLinux 10 with datasource-store's weft_fdb VFS linked in: build stage with the
 # Lean toolchain and FoundationDB's client library; run stage with the binary, the knowledge seed,
-# the generated domain, Erlang for epmd, and the same client library. One process serves HTTP on
-# 9920 and the Erlang node on 9930. Pages go to the cluster named by WEFT_FDB_CLUSTER_FILE when
+# the generated domain, and the same client library. One process serves HTTP on
+# 9920. Pages go to the cluster named by WEFT_FDB_CLUSTER_FILE when
 # FRONTIER_DB is file:frontier?vfs=weft_fdb; without those, the store is a SQLite file at /data.
 #
-# AlmaLinux 10 and EPEL 10 carry no Erlang, so epmd runs beside the node in one pod, from the
-# stock Erlang image; the two share localhost.
-#
 #   podman build -t frontier -f deploy/Containerfile .
-#   podman pod create --name frontier -p 9920:9920 -p 9930:9930 -p 4369:4369
-#   podman run -d --pod frontier --name epmd docker.io/library/erlang:27-alpine epmd -d
+#   podman pod create --name frontier -p 9920:9920
 #   podman run -d --pod frontier --name node -v frontier-data:/data \
 #     -v /etc/foundationdb/fdb.cluster:/etc/foundationdb/fdb.cluster:ro \
 #     -e FRONTIER_DB=file:frontier?vfs=weft_fdb -e WEFT_FDB_CLUSTER_FILE=/etc/foundationdb/fdb.cluster frontier
@@ -42,5 +38,5 @@ COPY entities/fixtures ./entities/fixtures
 RUN mkdir -p /data && useradd -r -d /app frontier && chown -R frontier /app /data
 USER frontier
 ENV FRONTIER_DB=/data/frontier.sqlite
-EXPOSE 9920 9930
-CMD ["sh", "-c", "[ -n \"$FRONTIER_COOKIE\" ] || [ -f /data/cookie ] || head -c 24 /dev/urandom | base64 > /data/cookie; exec /app/frontier --host 0.0.0.0 --port 9920 --dist-port 9930 ${FRONTIER_COOKIE:+--cookie $FRONTIER_COOKIE} ${FRONTIER_COOKIE:---cookie-file /data/cookie}"]
+EXPOSE 9920
+CMD ["/app/frontier", "--host", "0.0.0.0", "--port", "9920"]
