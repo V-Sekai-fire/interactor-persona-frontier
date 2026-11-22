@@ -27,7 +27,10 @@ def nat (j : Json) : Nat := (j.getNat?).toOption.getD 0
 
 /-- Stage ids in the knowledge file's order, numeric. -/
 def stageIds (k : Knowledge) : List String :=
-  (obj (field k "stages")).map (·.1) |>.toArray.qsort (fun a b => a.toNat! < b.toNat!) |>.toList
+  -- the order is the character subject's own list, then any other stage by key; no id is read as a number
+  let keys := (obj (field k "stages")).map (·.1)
+  let lead := (strs (field (field (field k "subjects") "character") "stages")).filter keys.contains
+  lead ++ ((keys.filter fun x => !lead.contains x).toArray.qsort (fun a b => a < b)).toList
 
 def subjects (k : Knowledge) : List (String × List String) :=
   let s := obj (field k "subjects")
