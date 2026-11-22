@@ -26,6 +26,19 @@ in
       description = "HTTP port.";
     };
 
+    weftfdb = lib.mkOption {
+      type = lib.types.package;
+      default = pkgs.frontier-weftfdb;
+      defaultText = lib.literalExpression "pkgs.frontier-weftfdb";
+      description = "The FoundationDB VFS module, used when foundationdb is on.";
+    };
+
+    foundationdb = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Keep the pages in FoundationDB, through the weftfdb VFS, on a FoundationDB service this module starts on the same host. Off keeps them in a SQLite file.";
+    };
+
     openFirewall = lib.mkOption {
       type = lib.types.bool;
       default = false;
@@ -34,11 +47,24 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    services.foundationdb = lib.mkIf cfg.foundationdb {
+      enable = true;
+      package = lib.mkDefault pkgs.foundationdb;
+    };
+
     systemd.services.frontier = {
       description = "frontier planner";
       wantedBy = [ "multi-user.target" ];
-      after = [ "network.target" ];
-      environment.FRONTIER_DB = "/var/lib/frontier/frontier.sqlite";
+      after = [ "network.target" ] ++ lib.optional cfg.foundationdb "foundationdb.service";
+      environment =
+        if cfg.foundationdb then {
+          FRONTIER_DB = "file:frontier?vfs=weft_fdb";
+          FRONTIER_VFS_EXT = "${cfg.weftfdb}/lib/weftfdb";
+          WEFT_FDB_CLUSTER_FILE = "/etc/foundationdb/fdb.cluster";
+        } else {
+          FRONTIER_DB = "/var/lib/frontier/frontier.sqlite";
+        };
+      requires = lib.optional cfg.foundationdb "foundationdb.service";
       serviceConfig = {
         ExecStart = "${lib.getExe cfg.package} --host ${cfg.host} --port ${toString cfg.port}";
         # the planner reads its seed files from ./seeds

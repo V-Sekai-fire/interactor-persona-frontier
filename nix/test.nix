@@ -6,12 +6,17 @@ pkgs.testers.runNixOSTest {
   nodes.machine = { ... }: {
     imports = [ self.nixosModules.default ];
     virtualisation.memorySize = 2048;
-    services.frontier.enable = true;
-    # the test's own package set is read-only, so the package is passed in, not added by the overlay
-    services.frontier.package = pkgs.frontier;
+    services.frontier = {
+      enable = true;
+      foundationdb = true;
+      # the test's own package set is read-only, so the packages are passed in, not added by the overlay
+      package = pkgs.frontier;
+      weftfdb = pkgs.frontier-weftfdb;
+    };
   };
 
   testScript = ''
+    machine.wait_for_unit("foundationdb.service")
     machine.wait_for_unit("frontier.service")
     machine.wait_for_open_port(9920)
 
@@ -25,7 +30,10 @@ pkgs.testers.runNixOSTest {
     assert 'reached\\":true' in ask("look-dev"), "look-dev was not planned"
     assert "undeclared_goal" in ask("reach-gpu-training-99"), "an undeclared goal was not refused"
 
-    # the state lives under /var/lib/frontier, not in the read-only package
-    machine.succeed("test -s /var/lib/private/frontier/frontier.sqlite")
+    # the pages are in FoundationDB, not a local file
+    machine.fail("test -e /var/lib/frontier/frontier.sqlite")
+    keys = machine.succeed("fdbcli --exec 'getrange weft/db/frontier/ weft/db/frontier0 20' --timeout 10")
+    assert "weft/db/frontier/HEAD" in keys, keys
+    assert '"kind":"request"' in keys, keys
   '';
 }

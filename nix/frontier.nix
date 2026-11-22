@@ -41,13 +41,21 @@ stdenv.mkDerivation {
       cp -r ${d.src} .lake/packages/${d.name}
       chmod -R u+w .lake/packages/${d.name}
     '') deps}
-    lake build frontier
+    lake build frontier frontier_witness
     runHook postBuild
+  '';
+
+  # the witness is the unit gate, so a build that fails it does not exist; it runs after the loader is
+  # patched, because the toolchain's binaries name a loader that NixOS lacks
+  doInstallCheck = true;
+  installCheckPhase = ''
+    $out/libexec/frontier_witness
   '';
 
   installPhase = ''
     runHook preInstall
     install -Dm755 .lake/build/bin/frontier $out/bin/frontier
+    install -Dm755 .lake/build/bin/frontier_witness $out/libexec/frontier_witness
     mkdir -p $out/share/frontier
     cp -r seeds $out/share/frontier/seeds
     runHook postInstall
