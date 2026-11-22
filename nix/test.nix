@@ -9,6 +9,9 @@ pkgs.testers.runNixOSTest {
     services.frontier = {
       enable = true;
       foundationdb = true;
+      osquery = true;
+      # a short interval so the test sees a result
+      osqueryInterval = 10;
       # the test's own package set is read-only, so the packages are passed in, not added by the overlay
       package = pkgs.frontier;
       weftfdb = pkgs.frontier-weftfdb;
@@ -29,6 +32,10 @@ pkgs.testers.runNixOSTest {
     # positive: a goal the pipeline has is planned; negative: one it has not is refused by name
     assert 'reached\\":true' in ask("look-dev"), "look-dev was not planned"
     assert "undeclared_goal" in ask("reach-gpu-training-99"), "an undeclared goal was not refused"
+
+    # the box reports its load: osqueryd runs and logs the scheduled query
+    machine.wait_for_unit("osqueryd.service")
+    machine.wait_until_succeeds("grep -q load_average /var/log/osquery/osqueryd.snapshots.log", timeout=120)
 
     # the pages are in FoundationDB, not a local file
     machine.fail("test -e /var/lib/frontier/frontier.sqlite")
