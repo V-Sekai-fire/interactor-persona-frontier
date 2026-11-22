@@ -1,7 +1,6 @@
-# One $12-server box: FoundationDB, the store's VFS, the Lean node. The Lean witness is the unit
-# gate; the StreamData suite calls the planner in-process through leanler; the node answers an
-# A2A request with its pages in FoundationDB, and the last step reads those pages back from
-# fdbcli, so a run that quietly fell back to a local file fails.
+# The whole gate is the flake: the package builds against the pinned Lean toolchain and runs the witness,
+# and the NixOS test starts the service on FoundationDB, plans a goal, refuses another, and reads the
+# pages back from fdbcli. Nothing else is installed here.
 name: node
 
 on:
@@ -10,78 +9,10 @@ on:
   pull_request:
 
 jobs:
-  node:
-    runs-on: ubuntu-22.04
+  flake:
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
-    env:
-      STORE_VERSION: abb688b70be3dc160c2cf5f32ff7d8e05da799ba
     steps:
       - uses: actions/checkout@v4
-
-      - name: FoundationDB 7.3.63, server and client
-        run: |
-          curl -sLO https://github.com/apple/foundationdb/releases/download/7.3.63/foundationdb-server_7.3.63-1_amd64.deb
-          curl -sLO https://github.com/apple/foundationdb/releases/download/7.3.63/foundationdb-clients_7.3.63-1_amd64.deb
-          sudo dpkg -i foundationdb-clients_7.3.63-1_amd64.deb foundationdb-server_7.3.63-1_amd64.deb
-          sudo systemctl restart foundationdb
-          for i in $(seq 1 30); do
-            fdbcli --exec "status minimal" --timeout 5 2>/dev/null | grep -q available && break
-            [ "$i" = 30 ] && { fdbcli --exec status --timeout 10; exit 1; }
-            sleep 2
-          done
-          fdbcli --exec "status minimal" --timeout 10
-
-      - name: Build toolchain, SQLite, Erlang and Elixir
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential cmake libsqlite3-dev sqlite3
-      - uses: erlef/setup-beam@v1
-        with:
-          otp-version: "27.2"
-          elixir-version: "1.18.3"
-
-      - name: datasource-store at a pinned commit, the weftfdb loadable VFS
-        uses: actions/checkout@v4
-        with:
-          repository: V-Sekai-fire/datasource-store
-          ref: ${{ env.STORE_VERSION }}
-          path: datasource-store
-          token: ${{ secrets.STORE_TOKEN || github.token }}
-      - run: |
-          cmake -S datasource-store -B datasource-store/build -DCMAKE_BUILD_TYPE=Release
-          cmake --build datasource-store/build --target weftfdb -j
-          ls -la datasource-store/build/weftfdb.so
-
-      - name: Lean toolchain from lean-toolchain
-        run: |
-          curl -sSfL https://github.com/leanprover/elan/releases/latest/download/elan-x86_64-unknown-linux-gnu.tar.gz | tar xz
-          ./elan-init -y --default-toolchain "$(cat lean-toolchain)"
-          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
-      - name: lake build
-        run: lake build
-
-      - name: Witness (unit gate, local SQLite file)
-        run: ./.lake/build/bin/frontier_witness
-
-      - name: The node, pages in FoundationDB
-        env:
-          FRONTIER_DB: file:frontier?vfs=weft_fdb
-          FRONTIER_VFS_EXT: ${{ github.workspace }}/datasource-store/build/weftfdb
-          WEFT_FDB_CLUSTER_FILE: /etc/foundationdb/fdb.cluster
-        run: |
-          nohup ./.lake/build/bin/frontier --port 9920 > frontier.log 2>&1 &
-          for i in $(seq 1 30); do curl -sf localhost:9920/.well-known/agent-card.json >/dev/null && break; sleep 1; done
-          cat frontier.log
-          curl -sf -X POST localhost:9920/ -d '{"jsonrpc":"2.0","id":1,"method":"message/send","params":{"message":{"role":"user","parts":[{"text":"world"}]}}}' | head -c 300; echo
-
-      - name: The planner in-process through leanler
-        run: |
-          mix deps.get
-          mix test
-
-      - name: The pages are in FoundationDB, not a local file
-        run: |
-          test ! -e frontier.sqlite
-          fdbcli --exec "getrange weft/db/frontier/ weft/db/frontier0 20" --timeout 10 | tee fdb-keys.txt
-          grep -q 'weft/db/frontier/HEAD' fdb-keys.txt
-          grep -q '"kind":"request"' fdb-keys.txt
+      - uses: DeterminateSystems/nix-installer-action@main
+      - run: nix flake check -L
