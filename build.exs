@@ -4,7 +4,7 @@
 # Installs what is missing through brew (macOS) or apt (Debian/Ubuntu): elan (the Lean toolchain
 # named in lean-toolchain), SQLite headers, Erlang and Elixir, a C compiler. Then: lake build,
 # the Lean witness, and the StreamData suite that calls the planner in-process through leanler. FoundationDB is not installed here; the FDB-backed run is deploy/cloud-init.yaml and
-# .github/workflows/node.yml. Every step returns {:ok, _} or {:error, reason}; the first error exits.
+# .github/workflows/flake.yml. Every step returns {:ok, _} or {:error, reason}; the first error exits.
 defmodule Build do
   @root Path.expand(__DIR__)
 

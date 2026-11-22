@@ -14,7 +14,7 @@ The plan comes from a planning domain of the pipeline, not from a language model
 
 - `entities/` is the pure core and its spec, `repositories/` the store port, `datasources/` the C under it, `transports/` the HTTP server, `deploy/` the box.
 - The routes and the store are documented at the top of `transports/Main.lean`. In Elixir, `Frontier.plan/2` answers in-process through leanler, with no node and no port.
-- `.github/workflows/node.yml` is the one-box run (FoundationDB, the store's VFS, the node, the in-process suite).
+- `.github/workflows/flake.yml` runs `nix flake check`: the package with its witness, and the NixOS test with FoundationDB and the HTTP checks.
 - `deploy/cloud-init.yaml` builds that box as DigitalOcean's `s-1vcpu-2gb` droplet ($12.00/mo); the challenge's thresholds (p95 < 500 ms, p99 < 1 s, < 1 % failed) are the load target.
 - `deploy/weights.exs` is every weight in one place, preloaded by hash so a 4090 box runs offline.
 - `docs/` holds the grading of the stages, the repository survey, the token ledger (`docs/tokens.exs`, run it), the judge probe, the serving strategy (`docs/serving.md`) and the one-release plan (`docs/release.md`).

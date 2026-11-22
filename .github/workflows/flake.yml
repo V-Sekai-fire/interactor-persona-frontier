@@ -1,7 +1,7 @@
 # The whole gate is the flake: the package builds against the pinned Lean toolchain and runs the witness,
 # and the NixOS test starts the service on FoundationDB, plans a goal, refuses another, and reads the
 # pages back from fdbcli. Nothing else is installed here.
-name: node
+name: flake
 
 on:
   push:
