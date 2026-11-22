@@ -109,7 +109,7 @@ defmodule Frontier.Tokens do
       permission :learn, :http_caller   # gated: positive and negative control
     end
 
-    # ---- subjects and stages, from entities/knowledge/knowledge.json
+    # ---- subjects and stages, from the seed files in seeds/
     subject :world, stages: ["1", "2", "4", "6", "7", "10"]
     subject :prop, stages: ["1", "2", "4", "6", "7", "10"]
     subject :character, stages: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]

@@ -54,7 +54,7 @@ extern_lib libfrontier_sql pkg := do
 -- that calls the core. Dependencies point inward only.
 lean_lib «Entities» where
   srcDir := "entities"
-  roots := #[`Frontier.Gen, `Frontier.Answer, `Frontier.Loop, `Frontier.Guest]
+  roots := #[`Frontier.Gen, `Frontier.Seed, `Frontier.Answer, `Frontier.Loop, `Frontier.Guest]
 
 lean_lib «Repositories» where
   srcDir := "repositories"

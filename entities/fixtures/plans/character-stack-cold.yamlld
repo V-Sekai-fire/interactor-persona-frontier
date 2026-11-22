@@ -34,6 +34,9 @@ steps:
   - action: acquire-token-contract-anny-kernels
     duration: PT0S
     params: []
+  - action: acquire-token-sinew-mocap-measure
+    duration: PT0S
+    params: []
   - action: settle-character-3
     duration: PT0S
     params: []

@@ -153,6 +153,11 @@ actions:
       - pointer/set: /token/silero-vad
         value: 1
     params: []
+  acquire-token-sinew-mocap-measure:
+    body:
+      - pointer/set: /token/sinew-mocap-measure
+        value: 1
+    params: []
   acquire-token-thorvg:
     body:
       - pointer/set: /token/thorvg
@@ -279,6 +284,12 @@ actions:
       - eval:
           a:
             pointer: /token/contract-anny-kernels
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - eval:
+          a:
+            pointer: /token/sinew-mocap-measure
             type: pointer/get
           b: 1
           type: math/ge
@@ -501,6 +512,33 @@ actions:
       - pointer/set: /stage/character-9
         value: 1
     params: []
+  settle-look-11:
+    body:
+      - pointer/set: /stage/look-11
+        value: 1
+    params: []
+  settle-look-12:
+    body:
+      - eval:
+          a:
+            pointer: /stage/look-11
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - pointer/set: /stage/look-12
+        value: 1
+    params: []
+  settle-look-13:
+    body:
+      - eval:
+          a:
+            pointer: /stage/look-12
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - pointer/set: /stage/look-13
+        value: 1
+    params: []
   settle-prop-1:
     body:
       - eval:
@@ -661,6 +699,33 @@ actions:
           b: 1
           type: math/ge
       - pointer/set: /stage/prop-7
+        value: 1
+    params: []
+  settle-series-14:
+    body:
+      - pointer/set: /stage/series-14
+        value: 1
+    params: []
+  settle-series-15:
+    body:
+      - eval:
+          a:
+            pointer: /stage/series-14
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - pointer/set: /stage/series-15
+        value: 1
+    params: []
+  settle-series-16:
+    body:
+      - eval:
+          a:
+            pointer: /stage/series-15
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - pointer/set: /stage/series-16
         value: 1
     params: []
   settle-world-1:
@@ -825,7 +890,7 @@ actions:
       - pointer/set: /stage/world-7
         value: 1
     params: []
-description: "The look-dev pipeline for characters, props and worlds, all GPU-skinned: settle-<subject>-N holds when the stages it requires are settled and the repositories it draws on are acquired. Requirements and durations are learned from experience reports; see entities/knowledge/knowledge.json."
+description: "The look-dev pipeline for characters, props and worlds, all GPU-skinned: settle-<subject>-N holds when the stages it requires are settled and the repositories it draws on are acquired. Requirements and durations are learned from experience reports and kept in the store; the authored data is the seed files in seeds/."
 methods:
   reach-character-1:
     alternatives:
@@ -902,6 +967,7 @@ methods:
           - - reach-token-interactor-anny-fit
           - - reach-token-interactor-headfit
           - - reach-token-contract-anny-kernels
+          - - reach-token-sinew-mocap-measure
           - - settle-character-3
     params: []
   reach-character-4:
@@ -1025,6 +1091,53 @@ methods:
           - - reach-token-weftspun-character-taxonomy
           - - settle-character-9
     params: []
+  reach-look-11:
+    alternatives:
+      - check:
+          - eval:
+              a:
+                pointer: /stage/look-11
+                type: pointer/get
+              b: 1
+              type: math/ge
+        name: held
+        subtasks: []
+      - name: settle
+        subtasks:
+          - - settle-look-11
+    params: []
+  reach-look-12:
+    alternatives:
+      - check:
+          - eval:
+              a:
+                pointer: /stage/look-12
+                type: pointer/get
+              b: 1
+              type: math/ge
+        name: held
+        subtasks: []
+      - name: settle
+        subtasks:
+          - - reach-look-11
+          - - settle-look-12
+    params: []
+  reach-look-13:
+    alternatives:
+      - check:
+          - eval:
+              a:
+                pointer: /stage/look-13
+                type: pointer/get
+              b: 1
+              type: math/ge
+        name: held
+        subtasks: []
+      - name: settle
+        subtasks:
+          - - reach-look-12
+          - - settle-look-13
+    params: []
   reach-prop-1:
     alternatives:
       - check:
@@ -1136,6 +1249,53 @@ methods:
           - - reach-token-interactor-motion-retarget
           - - reach-token-interactor-motion-matching-guest
           - - settle-prop-7
+    params: []
+  reach-series-14:
+    alternatives:
+      - check:
+          - eval:
+              a:
+                pointer: /stage/series-14
+                type: pointer/get
+              b: 1
+              type: math/ge
+        name: held
+        subtasks: []
+      - name: settle
+        subtasks:
+          - - settle-series-14
+    params: []
+  reach-series-15:
+    alternatives:
+      - check:
+          - eval:
+              a:
+                pointer: /stage/series-15
+                type: pointer/get
+              b: 1
+              type: math/ge
+        name: held
+        subtasks: []
+      - name: settle
+        subtasks:
+          - - reach-series-14
+          - - settle-series-15
+    params: []
+  reach-series-16:
+    alternatives:
+      - check:
+          - eval:
+              a:
+                pointer: /stage/series-16
+                type: pointer/get
+              b: 1
+              type: math/ge
+        name: held
+        subtasks: []
+      - name: settle
+        subtasks:
+          - - reach-series-15
+          - - settle-series-16
     params: []
   reach-token-contract-anny-kernels:
     alternatives:
@@ -1586,6 +1746,21 @@ methods:
       - name: acquire
         subtasks:
           - - acquire-token-silero-vad
+    params: []
+  reach-token-sinew-mocap-measure:
+    alternatives:
+      - check:
+          - eval:
+              a:
+                pointer: /token/sinew-mocap-measure
+                type: pointer/get
+              b: 1
+              type: math/ge
+        name: held
+        subtasks: []
+      - name: acquire
+        subtasks:
+          - - acquire-token-sinew-mocap-measure
     params: []
   reach-token-thorvg:
     alternatives:
