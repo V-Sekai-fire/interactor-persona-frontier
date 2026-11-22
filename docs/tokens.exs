@@ -53,7 +53,7 @@ defmodule Frontier.Tokens do
     token :cloud_init_systemd, :boring, "deploy/cloud-init.yaml"
     token :almalinux_10_container, :boring, "Containerfile, two stages, FoundationDB client linked"
     token :digitalocean_s_1vcpu_2gb, :boring, "the box, $12.00/mo; one box is one cell (deploy/pod.exs): fdb 0.45 cpu/1024 MiB, node 0.45/768, constant (0.10/64 left as headroom); more capacity is more cells"
-    token :github_actions, :boring, ".github/workflows/node.yml; blocked by billing on this private repo"
+    token :github_actions, :boring, ".github/workflows/flake.yml; blocked by billing on this private repo"
     token :json_ld, :paid, "the domain, problem and plan documents"
 
 
