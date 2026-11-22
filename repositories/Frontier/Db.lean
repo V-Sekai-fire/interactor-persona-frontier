@@ -1,4 +1,5 @@
 import Lean.Data.Json
+import Frontier.Seed
 /-!
 # The store: SQLite through one C shim, pages in FoundationDB when datasource-store's VFS is loaded.
 `FRONTIER_DB` is the database URL (default `frontier.sqlite`; `file:frontier?vfs=weft_fdb` with
@@ -46,20 +47,42 @@ def countTraces : IO Nat := do
   let rows ← sql "SELECT count(*) AS n FROM traces;"
   return (rows[0]? >>= fun r => (r.getObjVal? "n").toOption >>= (·.getStr?.toOption) >>= String.toNat?).getD 0
 
-/-- The knowledge row; seeded from `entities/knowledge/knowledge.json` when the table is empty. -/
-def knowledge : IO Json := do
-  let rows ← sql "SELECT body FROM knowledge WHERE id = 1;"
-  match rows[0]? >>= fun r => (r.getObjVal? "body").toOption >>= (·.getStr?.toOption) >>= fun b => (Json.parse b).toOption with
-  | some k => pure k
-  | none =>
-    let text ← IO.FS.readFile "entities/knowledge/knowledge.json"
-    let k ← match Json.parse text with | .ok k => pure k | .error e => throw (IO.userError s!"knowledge.json: {e}")
-    let rev := ((k.getObjVal? "revision").toOption >>= (·.getNat?.toOption)).getD 0
-    let _ ← sql s!"INSERT INTO knowledge (id, body, revision) VALUES (1, {quote k.compress}, {rev});"
-    pure k
+/-- The numbered seed files, in name order. -/
+def seedFiles : IO (List (String × String)) := do
+  let ents ← (System.FilePath.mk "seeds").readDir
+  let names : List String := (ents.toList.map fun (e : IO.FS.DirEntry) => e.fileName).filter (fun (n : String) => n.endsWith ".yamlld")
+  let sorted : List String := (names.toArray.qsort (fun (a b : String) => a < b)).toList
+  sorted.mapM fun (n : String) => do
+    let text ← IO.FS.readFile (System.FilePath.mk "seeds" / n)
+    return (n, text)
 
+/-- Apply each seed file once, in order. A file already applied must still match what was applied: a change
+goes in a new seed, so an edit to an old one is refused, as a migration's checksum would be. -/
+def applySeeds : IO Unit := do
+  let _ ← sql "CREATE TABLE IF NOT EXISTS seeds (name TEXT PRIMARY KEY, body TEXT NOT NULL, applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')));"
+  for (name, text) in ← seedFiles do
+    let body ← match Frontier.Seed.parse text with
+      | .ok j => pure j.compress
+      | .error e => throw (IO.userError s!"seed {name}: {e}")
+    let rows ← sql s!"SELECT body FROM seeds WHERE name = {quote name};"
+    match rows[0]? >>= fun r => (r.getObjVal? "body").toOption >>= (·.getStr?.toOption) with
+    | none => let _ ← sql s!"INSERT INTO seeds (name, body) VALUES ({quote name}, {quote body});"
+    | some old =>
+      if old != body then throw (IO.userError s!"seed {name} was edited after it was applied; add a new seed instead")
+
+/-- The knowledge: the applied seeds in order, with the learned rows over them. -/
+def knowledge : IO Json := do
+  applySeeds
+  let rows ← sql "SELECT body FROM seeds ORDER BY name;"
+  let seeds := rows.toList.filterMap fun r => (r.getObjVal? "body").toOption >>= (·.getStr?.toOption) >>= fun b => (Json.parse b).toOption
+  let learned ← sql "SELECT body FROM knowledge WHERE id = 1;"
+  let ov := (learned[0]? >>= fun r => (r.getObjVal? "body").toOption >>= (·.getStr?.toOption) >>= fun b => (Json.parse b).toOption).getD .null
+  return Frontier.Seed.withLearned (Frontier.Seed.fold seeds) ov
+
+/-- Only the learned rows are stored; the seeds are not copied into the knowledge row. -/
 def putKnowledge (k : Json) : IO Unit := do
-  let rev := ((k.getObjVal? "revision").toOption >>= (·.getNat?.toOption)).getD 0
-  let _ ← sql s!"INSERT INTO knowledge (id, body, revision) VALUES (1, {quote k.compress}, {rev}) ON CONFLICT(id) DO UPDATE SET body = excluded.body, revision = excluded.revision;"
+  let l := Frontier.Seed.learnedOf k
+  let rev := ((l.getObjVal? "revision").toOption >>= (·.getNat?.toOption)).getD 0
+  let _ ← sql s!"INSERT INTO knowledge (id, body, revision) VALUES (1, {quote l.compress}, {rev}) ON CONFLICT(id) DO UPDATE SET body = excluded.body, revision = excluded.revision;"
 
 end Frontier.Db

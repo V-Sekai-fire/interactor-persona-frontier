@@ -118,10 +118,9 @@ def learn (k : Knowledge) : IO Json := do
   let (g, gold) := gate k2
   let pass := (field g "pass").getBool?.toOption.getD false
   if pass then
+    -- what is learned lives in the store only; `seeds/` is the authored data and the fixtures are
+    -- rendered from it, so a learned duration never changes a tracked file
     Db.putKnowledge k2
-    IO.FS.writeFile "entities/knowledge/knowledge.json" (k2.pretty ++ "\n")
-    IO.FS.writeFile "entities/fixtures/domains/character-stack.yamlld" (YamlLd.render (Gen.domain k2))
-    IO.FS.writeFile "entities/fixtures/plans/character-stack-cold.yamlld" (YamlLd.render gold)
   return Json.mkObj [("revision", if pass then field k2 "revision" else field k "revision"), ("gate", g),
     ("requires", Json.mkObj ((stageIds k2).map fun n => (n, Json.arr ((requiresOf k2 n).map Json.str).toArray))), ("durations", field k2 "durations")]
 

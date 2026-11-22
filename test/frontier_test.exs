@@ -18,7 +18,7 @@ defmodule FrontierTest do
   @undeclared ~r/^\s*(reach-)?(character|prop|world)?[- ]?(\d+|look-dev|image-to-3d|body|gpu-skin|garments|look-render|gpu-motion|face-voice|persona|runtime)?\s*$/i
 
   setup_all do
-    {:ok, text} = File.read("entities/knowledge/knowledge.json")
+    {:ok, text} = Frontier.seeds_text()
     {:ok, text: text}
   end
 
@@ -77,15 +77,13 @@ defmodule FrontierTest do
   end
 
   test "control: the declared-goal predicate fails on broken knowledge", %{text: text} do
-    {:ok, k} = JSON.decode(text)
-    broken = JSON.encode!(put_in(k, ["subjects", "character", "stages"], ["1"]))
+    broken = text <> "\n---\n" <> JSON.encode!(%{"subjects" => %{"character" => %{"stages" => ["1"]}}})
     assert declared_ok?(text, "character", "10", "reach-character-10")
     refute declared_ok?(broken, "character", "10", "reach-character-10")
   end
 
   test "control: a changed requirement changes the plan", %{text: text} do
-    {:ok, k} = JSON.decode(text)
-    changed = JSON.encode!(put_in(k, ["stages", "10", "requires"], []))
+    changed = text <> "\n---\n" <> JSON.encode!(%{"stages" => %{"10" => %{"requires" => []}}})
     refute ask(text, "reach-character-10") == ask(changed, "reach-character-10")
   end
 end
