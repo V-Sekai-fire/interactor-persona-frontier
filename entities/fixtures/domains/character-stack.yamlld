@@ -168,104 +168,11 @@ actions:
       - pointer/set: /token/weftspun-character-taxonomy
         value: 1
     params: []
-  settle-character-1:
+  settle-character-body:
     body:
       - eval:
           a:
-            pointer: /token/omnigen2-editscore7b-v1.1
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - eval:
-          a:
-            pointer: /token/interactor-omnigen2-editscore-space
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - pointer/set: /stage/character-1
-        value: 1
-    params: []
-  settle-character-10:
-    body:
-      - eval:
-          a:
-            pointer: /stage/character-6
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - eval:
-          a:
-            pointer: /stage/character-7
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - eval:
-          a:
-            pointer: /stage/character-8
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - eval:
-          a:
-            pointer: /stage/character-9
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - eval:
-          a:
-            pointer: /token/contract-ggml-rd
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - eval:
-          a:
-            pointer: /token/contract-command
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - eval:
-          a:
-            pointer: /token/interactor-usd-guest
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - eval:
-          a:
-            pointer: /token/godot-vrm
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - pointer/set: /stage/character-10
-        value: 1
-    params: []
-  settle-character-2:
-    body:
-      - eval:
-          a:
-            pointer: /stage/character-1
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - eval:
-          a:
-            pointer: /token/interactor-trellis2-image-to-textured-mesh
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - eval:
-          a:
-            pointer: /token/contract-orbit-views
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - pointer/set: /stage/character-2
-        value: 1
-    params: []
-  settle-character-3:
-    body:
-      - eval:
-          a:
-            pointer: /stage/character-2
+            pointer: /stage/character-image-to-3d
             type: pointer/get
           b: 1
           type: math/ge
@@ -293,49 +200,55 @@ actions:
             type: pointer/get
           b: 1
           type: math/ge
-      - pointer/set: /stage/character-3
+      - pointer/set: /stage/character-body
         value: 1
     params: []
-  settle-character-4:
+  settle-character-face-voice:
     body:
       - eval:
           a:
-            pointer: /stage/character-3
+            pointer: /stage/character-body
             type: pointer/get
           b: 1
           type: math/ge
       - eval:
           a:
-            pointer: /token/interactor-skintokens-auto-rig
+            pointer: /stage/character-gpu-skin
             type: pointer/get
           b: 1
           type: math/ge
       - eval:
           a:
-            pointer: /token/interactor-skintokens-guest
+            pointer: /token/interactor-headfit
             type: pointer/get
           b: 1
           type: math/ge
       - eval:
           a:
-            pointer: /token/interactor-cage
+            pointer: /token/sherpa-onnx-zipformer
             type: pointer/get
           b: 1
           type: math/ge
       - eval:
           a:
-            pointer: /token/contract-ggml-rd
+            pointer: /token/interactor-voice
             type: pointer/get
           b: 1
           type: math/ge
-      - pointer/set: /stage/character-4
+      - eval:
+          a:
+            pointer: /token/silero-vad
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - pointer/set: /stage/character-face-voice
         value: 1
     params: []
-  settle-character-5:
+  settle-character-garments:
     body:
       - eval:
           a:
-            pointer: /stage/character-4
+            pointer: /stage/character-gpu-skin
             type: pointer/get
           b: 1
           type: math/ge
@@ -381,43 +294,14 @@ actions:
             type: pointer/get
           b: 1
           type: math/ge
-      - pointer/set: /stage/character-5
+      - pointer/set: /stage/character-garments
         value: 1
     params: []
-  settle-character-6:
+  settle-character-gpu-motion:
     body:
       - eval:
           a:
-            pointer: /stage/character-2
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - eval:
-          a:
-            pointer: /stage/character-5
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - eval:
-          a:
-            pointer: /token/interactor-slughorn
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - eval:
-          a:
-            pointer: /token/thorvg
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - pointer/set: /stage/character-6
-        value: 1
-    params: []
-  settle-character-7:
-    body:
-      - eval:
-          a:
-            pointer: /stage/character-4
+            pointer: /stage/character-gpu-skin
             type: pointer/get
           b: 1
           type: math/ge
@@ -439,55 +323,118 @@ actions:
             type: pointer/get
           b: 1
           type: math/ge
-      - pointer/set: /stage/character-7
+      - pointer/set: /stage/character-gpu-motion
         value: 1
     params: []
-  settle-character-8:
+  settle-character-gpu-skin:
     body:
       - eval:
           a:
-            pointer: /stage/character-3
+            pointer: /stage/character-body
             type: pointer/get
           b: 1
           type: math/ge
       - eval:
           a:
-            pointer: /stage/character-4
+            pointer: /token/interactor-skintokens-auto-rig
             type: pointer/get
           b: 1
           type: math/ge
       - eval:
           a:
-            pointer: /token/interactor-headfit
+            pointer: /token/interactor-skintokens-guest
             type: pointer/get
           b: 1
           type: math/ge
       - eval:
           a:
-            pointer: /token/sherpa-onnx-zipformer
+            pointer: /token/interactor-cage
             type: pointer/get
           b: 1
           type: math/ge
       - eval:
           a:
-            pointer: /token/interactor-voice
+            pointer: /token/contract-ggml-rd
             type: pointer/get
           b: 1
           type: math/ge
-      - eval:
-          a:
-            pointer: /token/silero-vad
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - pointer/set: /stage/character-8
+      - pointer/set: /stage/character-gpu-skin
         value: 1
     params: []
-  settle-character-9:
+  settle-character-image-to-3d:
     body:
       - eval:
           a:
-            pointer: /stage/character-8
+            pointer: /stage/character-look-dev
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - eval:
+          a:
+            pointer: /token/interactor-trellis2-image-to-textured-mesh
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - eval:
+          a:
+            pointer: /token/contract-orbit-views
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - pointer/set: /stage/character-image-to-3d
+        value: 1
+    params: []
+  settle-character-look-dev:
+    body:
+      - eval:
+          a:
+            pointer: /token/omnigen2-editscore7b-v1.1
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - eval:
+          a:
+            pointer: /token/interactor-omnigen2-editscore-space
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - pointer/set: /stage/character-look-dev
+        value: 1
+    params: []
+  settle-character-look-render:
+    body:
+      - eval:
+          a:
+            pointer: /stage/character-image-to-3d
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - eval:
+          a:
+            pointer: /stage/character-garments
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - eval:
+          a:
+            pointer: /token/interactor-slughorn
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - eval:
+          a:
+            pointer: /token/thorvg
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - pointer/set: /stage/character-look-render
+        value: 1
+    params: []
+  settle-character-persona:
+    body:
+      - eval:
+          a:
+            pointer: /stage/character-face-voice
             type: pointer/get
           b: 1
           type: math/ge
@@ -509,64 +456,32 @@ actions:
             type: pointer/get
           b: 1
           type: math/ge
-      - pointer/set: /stage/character-9
+      - pointer/set: /stage/character-persona
         value: 1
     params: []
-  settle-look-11:
-    body:
-      - pointer/set: /stage/look-11
-        value: 1
-    params: []
-  settle-look-12:
+  settle-character-runtime:
     body:
       - eval:
           a:
-            pointer: /stage/look-11
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - pointer/set: /stage/look-12
-        value: 1
-    params: []
-  settle-look-13:
-    body:
-      - eval:
-          a:
-            pointer: /stage/look-12
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - pointer/set: /stage/look-13
-        value: 1
-    params: []
-  settle-prop-1:
-    body:
-      - eval:
-          a:
-            pointer: /token/omnigen2-editscore7b-v1.1
+            pointer: /stage/character-look-render
             type: pointer/get
           b: 1
           type: math/ge
       - eval:
           a:
-            pointer: /token/interactor-omnigen2-editscore-space
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - pointer/set: /stage/prop-1
-        value: 1
-    params: []
-  settle-prop-10:
-    body:
-      - eval:
-          a:
-            pointer: /stage/prop-6
+            pointer: /stage/character-gpu-motion
             type: pointer/get
           b: 1
           type: math/ge
       - eval:
           a:
-            pointer: /stage/prop-7
+            pointer: /stage/character-face-voice
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - eval:
+          a:
+            pointer: /stage/character-persona
             type: pointer/get
           b: 1
           type: math/ge
@@ -594,33 +509,66 @@ actions:
             type: pointer/get
           b: 1
           type: math/ge
-      - pointer/set: /stage/prop-10
+      - pointer/set: /stage/character-runtime
         value: 1
     params: []
-  settle-prop-2:
+  settle-look-judge:
     body:
       - eval:
           a:
-            pointer: /stage/prop-1
+            pointer: /stage/look-render
             type: pointer/get
           b: 1
           type: math/ge
-      - eval:
-          a:
-            pointer: /token/interactor-trellis2-image-to-textured-mesh
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - eval:
-          a:
-            pointer: /token/contract-orbit-views
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - pointer/set: /stage/prop-2
+      - pointer/set: /stage/look-judge
         value: 1
     params: []
-  settle-prop-4:
+  settle-look-render:
+    body:
+      - pointer/set: /stage/look-render
+        value: 1
+    params: []
+  settle-look-report:
+    body:
+      - eval:
+          a:
+            pointer: /stage/look-judge
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - pointer/set: /stage/look-report
+        value: 1
+    params: []
+  settle-prop-gpu-motion:
+    body:
+      - eval:
+          a:
+            pointer: /stage/prop-gpu-skin
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - eval:
+          a:
+            pointer: /token/interactor-kimodo-text-to-motion
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - eval:
+          a:
+            pointer: /token/interactor-motion-retarget
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - eval:
+          a:
+            pointer: /token/interactor-motion-matching-guest
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - pointer/set: /stage/prop-gpu-motion
+        value: 1
+    params: []
+  settle-prop-gpu-skin:
     body:
       - eval:
           a:
@@ -646,14 +594,54 @@ actions:
             type: pointer/get
           b: 1
           type: math/ge
-      - pointer/set: /stage/prop-4
+      - pointer/set: /stage/prop-gpu-skin
         value: 1
     params: []
-  settle-prop-6:
+  settle-prop-image-to-3d:
     body:
       - eval:
           a:
-            pointer: /stage/prop-2
+            pointer: /stage/prop-look-dev
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - eval:
+          a:
+            pointer: /token/interactor-trellis2-image-to-textured-mesh
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - eval:
+          a:
+            pointer: /token/contract-orbit-views
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - pointer/set: /stage/prop-image-to-3d
+        value: 1
+    params: []
+  settle-prop-look-dev:
+    body:
+      - eval:
+          a:
+            pointer: /token/omnigen2-editscore7b-v1.1
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - eval:
+          a:
+            pointer: /token/interactor-omnigen2-editscore-space
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - pointer/set: /stage/prop-look-dev
+        value: 1
+    params: []
+  settle-prop-look-render:
+    body:
+      - eval:
+          a:
+            pointer: /stage/prop-image-to-3d
             type: pointer/get
           b: 1
           type: math/ge
@@ -669,93 +657,20 @@ actions:
             type: pointer/get
           b: 1
           type: math/ge
-      - pointer/set: /stage/prop-6
+      - pointer/set: /stage/prop-look-render
         value: 1
     params: []
-  settle-prop-7:
+  settle-prop-runtime:
     body:
       - eval:
           a:
-            pointer: /stage/prop-4
+            pointer: /stage/prop-look-render
             type: pointer/get
           b: 1
           type: math/ge
       - eval:
           a:
-            pointer: /token/interactor-kimodo-text-to-motion
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - eval:
-          a:
-            pointer: /token/interactor-motion-retarget
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - eval:
-          a:
-            pointer: /token/interactor-motion-matching-guest
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - pointer/set: /stage/prop-7
-        value: 1
-    params: []
-  settle-series-14:
-    body:
-      - pointer/set: /stage/series-14
-        value: 1
-    params: []
-  settle-series-15:
-    body:
-      - eval:
-          a:
-            pointer: /stage/series-14
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - pointer/set: /stage/series-15
-        value: 1
-    params: []
-  settle-series-16:
-    body:
-      - eval:
-          a:
-            pointer: /stage/series-15
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - pointer/set: /stage/series-16
-        value: 1
-    params: []
-  settle-world-1:
-    body:
-      - eval:
-          a:
-            pointer: /token/omnigen2-editscore7b-v1.1
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - eval:
-          a:
-            pointer: /token/interactor-omnigen2-editscore-space
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - pointer/set: /stage/world-1
-        value: 1
-    params: []
-  settle-world-10:
-    body:
-      - eval:
-          a:
-            pointer: /stage/world-6
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - eval:
-          a:
-            pointer: /stage/world-7
+            pointer: /stage/prop-gpu-motion
             type: pointer/get
           b: 1
           type: math/ge
@@ -783,33 +698,66 @@ actions:
             type: pointer/get
           b: 1
           type: math/ge
-      - pointer/set: /stage/world-10
+      - pointer/set: /stage/prop-runtime
         value: 1
     params: []
-  settle-world-2:
+  settle-series-sweep-judge:
     body:
       - eval:
           a:
-            pointer: /stage/world-1
+            pointer: /stage/series-sweep-render
             type: pointer/get
           b: 1
           type: math/ge
-      - eval:
-          a:
-            pointer: /token/interactor-trellis2-image-to-textured-mesh
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - eval:
-          a:
-            pointer: /token/contract-orbit-views
-            type: pointer/get
-          b: 1
-          type: math/ge
-      - pointer/set: /stage/world-2
+      - pointer/set: /stage/series-sweep-judge
         value: 1
     params: []
-  settle-world-4:
+  settle-series-sweep-render:
+    body:
+      - pointer/set: /stage/series-sweep-render
+        value: 1
+    params: []
+  settle-series-sweep-report:
+    body:
+      - eval:
+          a:
+            pointer: /stage/series-sweep-judge
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - pointer/set: /stage/series-sweep-report
+        value: 1
+    params: []
+  settle-world-gpu-motion:
+    body:
+      - eval:
+          a:
+            pointer: /stage/world-gpu-skin
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - eval:
+          a:
+            pointer: /token/interactor-kimodo-text-to-motion
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - eval:
+          a:
+            pointer: /token/interactor-motion-retarget
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - eval:
+          a:
+            pointer: /token/interactor-motion-matching-guest
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - pointer/set: /stage/world-gpu-motion
+        value: 1
+    params: []
+  settle-world-gpu-skin:
     body:
       - eval:
           a:
@@ -835,14 +783,54 @@ actions:
             type: pointer/get
           b: 1
           type: math/ge
-      - pointer/set: /stage/world-4
+      - pointer/set: /stage/world-gpu-skin
         value: 1
     params: []
-  settle-world-6:
+  settle-world-image-to-3d:
     body:
       - eval:
           a:
-            pointer: /stage/world-2
+            pointer: /stage/world-look-dev
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - eval:
+          a:
+            pointer: /token/interactor-trellis2-image-to-textured-mesh
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - eval:
+          a:
+            pointer: /token/contract-orbit-views
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - pointer/set: /stage/world-image-to-3d
+        value: 1
+    params: []
+  settle-world-look-dev:
+    body:
+      - eval:
+          a:
+            pointer: /token/omnigen2-editscore7b-v1.1
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - eval:
+          a:
+            pointer: /token/interactor-omnigen2-editscore-space
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - pointer/set: /stage/world-look-dev
+        value: 1
+    params: []
+  settle-world-look-render:
+    body:
+      - eval:
+          a:
+            pointer: /stage/world-image-to-3d
             type: pointer/get
           b: 1
           type: math/ge
@@ -858,46 +846,58 @@ actions:
             type: pointer/get
           b: 1
           type: math/ge
-      - pointer/set: /stage/world-6
+      - pointer/set: /stage/world-look-render
         value: 1
     params: []
-  settle-world-7:
+  settle-world-runtime:
     body:
       - eval:
           a:
-            pointer: /stage/world-4
+            pointer: /stage/world-look-render
             type: pointer/get
           b: 1
           type: math/ge
       - eval:
           a:
-            pointer: /token/interactor-kimodo-text-to-motion
+            pointer: /stage/world-gpu-motion
             type: pointer/get
           b: 1
           type: math/ge
       - eval:
           a:
-            pointer: /token/interactor-motion-retarget
+            pointer: /token/contract-ggml-rd
             type: pointer/get
           b: 1
           type: math/ge
       - eval:
           a:
-            pointer: /token/interactor-motion-matching-guest
+            pointer: /token/contract-command
             type: pointer/get
           b: 1
           type: math/ge
-      - pointer/set: /stage/world-7
+      - eval:
+          a:
+            pointer: /token/interactor-usd-guest
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - eval:
+          a:
+            pointer: /token/godot-vrm
+            type: pointer/get
+          b: 1
+          type: math/ge
+      - pointer/set: /stage/world-runtime
         value: 1
     params: []
 description: "The look-dev pipeline for characters, props and worlds, all GPU-skinned: settle-<subject>-N holds when the stages it requires are settled and the repositories it draws on are acquired. Requirements and durations are learned from experience reports and kept in the store; the authored data is the seed files in seeds/."
 methods:
-  reach-character-1:
+  reach-character-body:
     alternatives:
       - check:
           - eval:
               a:
-                pointer: /stage/character-1
+                pointer: /stage/character-body
                 type: pointer/get
               b: 1
               type: math/ge
@@ -905,77 +905,19 @@ methods:
         subtasks: []
       - name: settle
         subtasks:
-          - - reach-token-omnigen2-editscore7b-v1.1
-          - - reach-token-interactor-omnigen2-editscore-space
-          - - settle-character-1
-    params: []
-  reach-character-10:
-    alternatives:
-      - check:
-          - eval:
-              a:
-                pointer: /stage/character-10
-                type: pointer/get
-              b: 1
-              type: math/ge
-        name: held
-        subtasks: []
-      - name: settle
-        subtasks:
-          - - reach-character-6
-          - - reach-character-7
-          - - reach-character-8
-          - - reach-character-9
-          - - reach-token-contract-ggml-rd
-          - - reach-token-contract-command
-          - - reach-token-interactor-usd-guest
-          - - reach-token-godot-vrm
-          - - settle-character-10
-    params: []
-  reach-character-2:
-    alternatives:
-      - check:
-          - eval:
-              a:
-                pointer: /stage/character-2
-                type: pointer/get
-              b: 1
-              type: math/ge
-        name: held
-        subtasks: []
-      - name: settle
-        subtasks:
-          - - reach-character-1
-          - - reach-token-interactor-trellis2-image-to-textured-mesh
-          - - reach-token-contract-orbit-views
-          - - settle-character-2
-    params: []
-  reach-character-3:
-    alternatives:
-      - check:
-          - eval:
-              a:
-                pointer: /stage/character-3
-                type: pointer/get
-              b: 1
-              type: math/ge
-        name: held
-        subtasks: []
-      - name: settle
-        subtasks:
-          - - reach-character-2
+          - - reach-character-image-to-3d
           - - reach-token-interactor-anny-fit
           - - reach-token-interactor-headfit
           - - reach-token-contract-anny-kernels
           - - reach-token-sinew-mocap-measure
-          - - settle-character-3
+          - - settle-character-body
     params: []
-  reach-character-4:
+  reach-character-face-voice:
     alternatives:
       - check:
           - eval:
               a:
-                pointer: /stage/character-4
+                pointer: /stage/character-face-voice
                 type: pointer/get
               b: 1
               type: math/ge
@@ -983,19 +925,20 @@ methods:
         subtasks: []
       - name: settle
         subtasks:
-          - - reach-character-3
-          - - reach-token-interactor-skintokens-auto-rig
-          - - reach-token-interactor-skintokens-guest
-          - - reach-token-interactor-cage
-          - - reach-token-contract-ggml-rd
-          - - settle-character-4
+          - - reach-character-body
+          - - reach-character-gpu-skin
+          - - reach-token-interactor-headfit
+          - - reach-token-sherpa-onnx-zipformer
+          - - reach-token-interactor-voice
+          - - reach-token-silero-vad
+          - - settle-character-face-voice
     params: []
-  reach-character-5:
+  reach-character-garments:
     alternatives:
       - check:
           - eval:
               a:
-                pointer: /stage/character-5
+                pointer: /stage/character-garments
                 type: pointer/get
               b: 1
               type: math/ge
@@ -1003,7 +946,7 @@ methods:
         subtasks: []
       - name: settle
         subtasks:
-          - - reach-character-4
+          - - reach-character-gpu-skin
           - - reach-token-point-sam
           - - reach-token-geosam2
           - - reach-token-interactor-remesh
@@ -1011,14 +954,14 @@ methods:
           - - reach-token-interactor-cloth-fit-guest
           - - reach-token-interactor-drape
           - - reach-token-interactor-bake
-          - - settle-character-5
+          - - settle-character-garments
     params: []
-  reach-character-6:
+  reach-character-gpu-motion:
     alternatives:
       - check:
           - eval:
               a:
-                pointer: /stage/character-6
+                pointer: /stage/character-gpu-motion
                 type: pointer/get
               b: 1
               type: math/ge
@@ -1026,37 +969,18 @@ methods:
         subtasks: []
       - name: settle
         subtasks:
-          - - reach-character-2
-          - - reach-character-5
-          - - reach-token-interactor-slughorn
-          - - reach-token-thorvg
-          - - settle-character-6
-    params: []
-  reach-character-7:
-    alternatives:
-      - check:
-          - eval:
-              a:
-                pointer: /stage/character-7
-                type: pointer/get
-              b: 1
-              type: math/ge
-        name: held
-        subtasks: []
-      - name: settle
-        subtasks:
-          - - reach-character-4
+          - - reach-character-gpu-skin
           - - reach-token-interactor-kimodo-text-to-motion
           - - reach-token-interactor-motion-retarget
           - - reach-token-interactor-motion-matching-guest
-          - - settle-character-7
+          - - settle-character-gpu-motion
     params: []
-  reach-character-8:
+  reach-character-gpu-skin:
     alternatives:
       - check:
           - eval:
               a:
-                pointer: /stage/character-8
+                pointer: /stage/character-gpu-skin
                 type: pointer/get
               b: 1
               type: math/ge
@@ -1064,20 +988,19 @@ methods:
         subtasks: []
       - name: settle
         subtasks:
-          - - reach-character-3
-          - - reach-character-4
-          - - reach-token-interactor-headfit
-          - - reach-token-sherpa-onnx-zipformer
-          - - reach-token-interactor-voice
-          - - reach-token-silero-vad
-          - - settle-character-8
+          - - reach-character-body
+          - - reach-token-interactor-skintokens-auto-rig
+          - - reach-token-interactor-skintokens-guest
+          - - reach-token-interactor-cage
+          - - reach-token-contract-ggml-rd
+          - - settle-character-gpu-skin
     params: []
-  reach-character-9:
+  reach-character-image-to-3d:
     alternatives:
       - check:
           - eval:
               a:
-                pointer: /stage/character-9
+                pointer: /stage/character-image-to-3d
                 type: pointer/get
               b: 1
               type: math/ge
@@ -1085,65 +1008,17 @@ methods:
         subtasks: []
       - name: settle
         subtasks:
-          - - reach-character-8
-          - - reach-token-interactor-taskweft-persona
-          - - reach-token-interactor-a2a
-          - - reach-token-weftspun-character-taxonomy
-          - - settle-character-9
+          - - reach-character-look-dev
+          - - reach-token-interactor-trellis2-image-to-textured-mesh
+          - - reach-token-contract-orbit-views
+          - - settle-character-image-to-3d
     params: []
-  reach-look-11:
+  reach-character-look-dev:
     alternatives:
       - check:
           - eval:
               a:
-                pointer: /stage/look-11
-                type: pointer/get
-              b: 1
-              type: math/ge
-        name: held
-        subtasks: []
-      - name: settle
-        subtasks:
-          - - settle-look-11
-    params: []
-  reach-look-12:
-    alternatives:
-      - check:
-          - eval:
-              a:
-                pointer: /stage/look-12
-                type: pointer/get
-              b: 1
-              type: math/ge
-        name: held
-        subtasks: []
-      - name: settle
-        subtasks:
-          - - reach-look-11
-          - - settle-look-12
-    params: []
-  reach-look-13:
-    alternatives:
-      - check:
-          - eval:
-              a:
-                pointer: /stage/look-13
-                type: pointer/get
-              b: 1
-              type: math/ge
-        name: held
-        subtasks: []
-      - name: settle
-        subtasks:
-          - - reach-look-12
-          - - settle-look-13
-    params: []
-  reach-prop-1:
-    alternatives:
-      - check:
-          - eval:
-              a:
-                pointer: /stage/prop-1
+                pointer: /stage/character-look-dev
                 type: pointer/get
               b: 1
               type: math/ge
@@ -1153,14 +1028,14 @@ methods:
         subtasks:
           - - reach-token-omnigen2-editscore7b-v1.1
           - - reach-token-interactor-omnigen2-editscore-space
-          - - settle-prop-1
+          - - settle-character-look-dev
     params: []
-  reach-prop-10:
+  reach-character-look-render:
     alternatives:
       - check:
           - eval:
               a:
-                pointer: /stage/prop-10
+                pointer: /stage/character-look-render
                 type: pointer/get
               b: 1
               type: math/ge
@@ -1168,20 +1043,60 @@ methods:
         subtasks: []
       - name: settle
         subtasks:
-          - - reach-prop-6
-          - - reach-prop-7
+          - - reach-character-image-to-3d
+          - - reach-character-garments
+          - - reach-token-interactor-slughorn
+          - - reach-token-thorvg
+          - - settle-character-look-render
+    params: []
+  reach-character-persona:
+    alternatives:
+      - check:
+          - eval:
+              a:
+                pointer: /stage/character-persona
+                type: pointer/get
+              b: 1
+              type: math/ge
+        name: held
+        subtasks: []
+      - name: settle
+        subtasks:
+          - - reach-character-face-voice
+          - - reach-token-interactor-taskweft-persona
+          - - reach-token-interactor-a2a
+          - - reach-token-weftspun-character-taxonomy
+          - - settle-character-persona
+    params: []
+  reach-character-runtime:
+    alternatives:
+      - check:
+          - eval:
+              a:
+                pointer: /stage/character-runtime
+                type: pointer/get
+              b: 1
+              type: math/ge
+        name: held
+        subtasks: []
+      - name: settle
+        subtasks:
+          - - reach-character-look-render
+          - - reach-character-gpu-motion
+          - - reach-character-face-voice
+          - - reach-character-persona
           - - reach-token-contract-ggml-rd
           - - reach-token-contract-command
           - - reach-token-interactor-usd-guest
           - - reach-token-godot-vrm
-          - - settle-prop-10
+          - - settle-character-runtime
     params: []
-  reach-prop-2:
+  reach-look-judge:
     alternatives:
       - check:
           - eval:
               a:
-                pointer: /stage/prop-2
+                pointer: /stage/look-judge
                 type: pointer/get
               b: 1
               type: math/ge
@@ -1189,17 +1104,65 @@ methods:
         subtasks: []
       - name: settle
         subtasks:
-          - - reach-prop-1
-          - - reach-token-interactor-trellis2-image-to-textured-mesh
-          - - reach-token-contract-orbit-views
-          - - settle-prop-2
+          - - reach-look-render
+          - - settle-look-judge
     params: []
-  reach-prop-4:
+  reach-look-render:
     alternatives:
       - check:
           - eval:
               a:
-                pointer: /stage/prop-4
+                pointer: /stage/look-render
+                type: pointer/get
+              b: 1
+              type: math/ge
+        name: held
+        subtasks: []
+      - name: settle
+        subtasks:
+          - - settle-look-render
+    params: []
+  reach-look-report:
+    alternatives:
+      - check:
+          - eval:
+              a:
+                pointer: /stage/look-report
+                type: pointer/get
+              b: 1
+              type: math/ge
+        name: held
+        subtasks: []
+      - name: settle
+        subtasks:
+          - - reach-look-judge
+          - - settle-look-report
+    params: []
+  reach-prop-gpu-motion:
+    alternatives:
+      - check:
+          - eval:
+              a:
+                pointer: /stage/prop-gpu-motion
+                type: pointer/get
+              b: 1
+              type: math/ge
+        name: held
+        subtasks: []
+      - name: settle
+        subtasks:
+          - - reach-prop-gpu-skin
+          - - reach-token-interactor-kimodo-text-to-motion
+          - - reach-token-interactor-motion-retarget
+          - - reach-token-interactor-motion-matching-guest
+          - - settle-prop-gpu-motion
+    params: []
+  reach-prop-gpu-skin:
+    alternatives:
+      - check:
+          - eval:
+              a:
+                pointer: /stage/prop-gpu-skin
                 type: pointer/get
               b: 1
               type: math/ge
@@ -1211,14 +1174,14 @@ methods:
           - - reach-token-interactor-skintokens-guest
           - - reach-token-interactor-cage
           - - reach-token-contract-ggml-rd
-          - - settle-prop-4
+          - - settle-prop-gpu-skin
     params: []
-  reach-prop-6:
+  reach-prop-image-to-3d:
     alternatives:
       - check:
           - eval:
               a:
-                pointer: /stage/prop-6
+                pointer: /stage/prop-image-to-3d
                 type: pointer/get
               b: 1
               type: math/ge
@@ -1226,17 +1189,52 @@ methods:
         subtasks: []
       - name: settle
         subtasks:
-          - - reach-prop-2
+          - - reach-prop-look-dev
+          - - reach-token-interactor-trellis2-image-to-textured-mesh
+          - - reach-token-contract-orbit-views
+          - - settle-prop-image-to-3d
+    params: []
+  reach-prop-look-dev:
+    alternatives:
+      - check:
+          - eval:
+              a:
+                pointer: /stage/prop-look-dev
+                type: pointer/get
+              b: 1
+              type: math/ge
+        name: held
+        subtasks: []
+      - name: settle
+        subtasks:
+          - - reach-token-omnigen2-editscore7b-v1.1
+          - - reach-token-interactor-omnigen2-editscore-space
+          - - settle-prop-look-dev
+    params: []
+  reach-prop-look-render:
+    alternatives:
+      - check:
+          - eval:
+              a:
+                pointer: /stage/prop-look-render
+                type: pointer/get
+              b: 1
+              type: math/ge
+        name: held
+        subtasks: []
+      - name: settle
+        subtasks:
+          - - reach-prop-image-to-3d
           - - reach-token-interactor-slughorn
           - - reach-token-thorvg
-          - - settle-prop-6
+          - - settle-prop-look-render
     params: []
-  reach-prop-7:
+  reach-prop-runtime:
     alternatives:
       - check:
           - eval:
               a:
-                pointer: /stage/prop-7
+                pointer: /stage/prop-runtime
                 type: pointer/get
               b: 1
               type: math/ge
@@ -1244,18 +1242,20 @@ methods:
         subtasks: []
       - name: settle
         subtasks:
-          - - reach-prop-4
-          - - reach-token-interactor-kimodo-text-to-motion
-          - - reach-token-interactor-motion-retarget
-          - - reach-token-interactor-motion-matching-guest
-          - - settle-prop-7
+          - - reach-prop-look-render
+          - - reach-prop-gpu-motion
+          - - reach-token-contract-ggml-rd
+          - - reach-token-contract-command
+          - - reach-token-interactor-usd-guest
+          - - reach-token-godot-vrm
+          - - settle-prop-runtime
     params: []
-  reach-series-14:
+  reach-series-sweep-judge:
     alternatives:
       - check:
           - eval:
               a:
-                pointer: /stage/series-14
+                pointer: /stage/series-sweep-judge
                 type: pointer/get
               b: 1
               type: math/ge
@@ -1263,14 +1263,15 @@ methods:
         subtasks: []
       - name: settle
         subtasks:
-          - - settle-series-14
+          - - reach-series-sweep-render
+          - - settle-series-sweep-judge
     params: []
-  reach-series-15:
+  reach-series-sweep-render:
     alternatives:
       - check:
           - eval:
               a:
-                pointer: /stage/series-15
+                pointer: /stage/series-sweep-render
                 type: pointer/get
               b: 1
               type: math/ge
@@ -1278,15 +1279,14 @@ methods:
         subtasks: []
       - name: settle
         subtasks:
-          - - reach-series-14
-          - - settle-series-15
+          - - settle-series-sweep-render
     params: []
-  reach-series-16:
+  reach-series-sweep-report:
     alternatives:
       - check:
           - eval:
               a:
-                pointer: /stage/series-16
+                pointer: /stage/series-sweep-report
                 type: pointer/get
               b: 1
               type: math/ge
@@ -1294,8 +1294,8 @@ methods:
         subtasks: []
       - name: settle
         subtasks:
-          - - reach-series-15
-          - - settle-series-16
+          - - reach-series-sweep-judge
+          - - settle-series-sweep-report
     params: []
   reach-token-contract-anny-kernels:
     alternatives:
@@ -1792,12 +1792,12 @@ methods:
         subtasks:
           - - acquire-token-weftspun-character-taxonomy
     params: []
-  reach-world-1:
+  reach-world-gpu-motion:
     alternatives:
       - check:
           - eval:
               a:
-                pointer: /stage/world-1
+                pointer: /stage/world-gpu-motion
                 type: pointer/get
               b: 1
               type: math/ge
@@ -1805,55 +1805,18 @@ methods:
         subtasks: []
       - name: settle
         subtasks:
-          - - reach-token-omnigen2-editscore7b-v1.1
-          - - reach-token-interactor-omnigen2-editscore-space
-          - - settle-world-1
+          - - reach-world-gpu-skin
+          - - reach-token-interactor-kimodo-text-to-motion
+          - - reach-token-interactor-motion-retarget
+          - - reach-token-interactor-motion-matching-guest
+          - - settle-world-gpu-motion
     params: []
-  reach-world-10:
+  reach-world-gpu-skin:
     alternatives:
       - check:
           - eval:
               a:
-                pointer: /stage/world-10
-                type: pointer/get
-              b: 1
-              type: math/ge
-        name: held
-        subtasks: []
-      - name: settle
-        subtasks:
-          - - reach-world-6
-          - - reach-world-7
-          - - reach-token-contract-ggml-rd
-          - - reach-token-contract-command
-          - - reach-token-interactor-usd-guest
-          - - reach-token-godot-vrm
-          - - settle-world-10
-    params: []
-  reach-world-2:
-    alternatives:
-      - check:
-          - eval:
-              a:
-                pointer: /stage/world-2
-                type: pointer/get
-              b: 1
-              type: math/ge
-        name: held
-        subtasks: []
-      - name: settle
-        subtasks:
-          - - reach-world-1
-          - - reach-token-interactor-trellis2-image-to-textured-mesh
-          - - reach-token-contract-orbit-views
-          - - settle-world-2
-    params: []
-  reach-world-4:
-    alternatives:
-      - check:
-          - eval:
-              a:
-                pointer: /stage/world-4
+                pointer: /stage/world-gpu-skin
                 type: pointer/get
               b: 1
               type: math/ge
@@ -1865,14 +1828,14 @@ methods:
           - - reach-token-interactor-skintokens-guest
           - - reach-token-interactor-cage
           - - reach-token-contract-ggml-rd
-          - - settle-world-4
+          - - settle-world-gpu-skin
     params: []
-  reach-world-6:
+  reach-world-image-to-3d:
     alternatives:
       - check:
           - eval:
               a:
-                pointer: /stage/world-6
+                pointer: /stage/world-image-to-3d
                 type: pointer/get
               b: 1
               type: math/ge
@@ -1880,17 +1843,52 @@ methods:
         subtasks: []
       - name: settle
         subtasks:
-          - - reach-world-2
+          - - reach-world-look-dev
+          - - reach-token-interactor-trellis2-image-to-textured-mesh
+          - - reach-token-contract-orbit-views
+          - - settle-world-image-to-3d
+    params: []
+  reach-world-look-dev:
+    alternatives:
+      - check:
+          - eval:
+              a:
+                pointer: /stage/world-look-dev
+                type: pointer/get
+              b: 1
+              type: math/ge
+        name: held
+        subtasks: []
+      - name: settle
+        subtasks:
+          - - reach-token-omnigen2-editscore7b-v1.1
+          - - reach-token-interactor-omnigen2-editscore-space
+          - - settle-world-look-dev
+    params: []
+  reach-world-look-render:
+    alternatives:
+      - check:
+          - eval:
+              a:
+                pointer: /stage/world-look-render
+                type: pointer/get
+              b: 1
+              type: math/ge
+        name: held
+        subtasks: []
+      - name: settle
+        subtasks:
+          - - reach-world-image-to-3d
           - - reach-token-interactor-slughorn
           - - reach-token-thorvg
-          - - settle-world-6
+          - - settle-world-look-render
     params: []
-  reach-world-7:
+  reach-world-runtime:
     alternatives:
       - check:
           - eval:
               a:
-                pointer: /stage/world-7
+                pointer: /stage/world-runtime
                 type: pointer/get
               b: 1
               type: math/ge
@@ -1898,11 +1896,13 @@ methods:
         subtasks: []
       - name: settle
         subtasks:
-          - - reach-world-4
-          - - reach-token-interactor-kimodo-text-to-motion
-          - - reach-token-interactor-motion-retarget
-          - - reach-token-interactor-motion-matching-guest
-          - - settle-world-7
+          - - reach-world-look-render
+          - - reach-world-gpu-motion
+          - - reach-token-contract-ggml-rd
+          - - reach-token-contract-command
+          - - reach-token-interactor-usd-guest
+          - - reach-token-godot-vrm
+          - - settle-world-runtime
     params: []
 name: character_stack
 source: interactor-persona-frontier

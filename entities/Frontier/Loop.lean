@@ -54,7 +54,7 @@ def practice (k : Knowledge) : IO Json := do
     let list := ((subjects k).lookup l.subject).getD []
     let heldN := list.take l.held
     let held := heldN.map fun n => s!"{l.subject}-{n}"
-    let goalN := (list[l.goal - 1]?).getD "1"
+    let goalN := (list[l.goal - 1]?).getD (list.head?.getD "")
     let mut toks := heldN.flatMap (tokensOf k)
     for t in allTokens k do
       if (← IO.rand 0 9) < 3 then toks := toks ++ [t]
@@ -81,18 +81,21 @@ def experience (r : Json) : IO Json := do
   | _, _ => return Json.mkObj [("refused", "bad_experience")]
 
 /-- The gate: the cold character problem reaches with every character stage settled (positive
-control), and a domain where stage 10 forgets its requirements plans differently (negative). -/
+control), and a domain where the last stage forgets its requirements plans differently (negative). -/
 def gate (k : Knowledge) : Json × Json :=
-  let cold := Gen.problem k "gate" [] [] "reach-character-10"
+  let chars := ((subjects k).lookup "character").getD []
+  let last := chars.getLast?.getD ""
+  let cold := Gen.problem k "gate" [] [] s!"reach-character-{last}"
   let gold := planJson k cold
-  let nChar := ((subjects k).lookup "character").getD [] |>.length
+  let nChar := chars.length
   let positive := reached gold && (settled gold).length == nChar
-  let broken := k.setObjVal! "stages" ((field k "stages").setObjVal! "10" ((field (field k "stages") "10").setObjVal! "requires" (Json.arr #[])))
+  let broken := k.setObjVal! "stages" ((field k "stages").setObjVal! last ((field (field k "stages") last).setObjVal! "requires" (Json.arr #[])))
   let bad := planJson broken cold
   let negative := field bad "steps" != field gold "steps"
   (Json.mkObj [("pass", positive && negative), ("positive", positive), ("negative", negative)], gold)
 
-def bare (hb : List String) : List String := hb.map fun h => match h.splitOn "-" with | [_, n] => n | _ => h
+/-- `character-<id>` to `<id>`: drop the subject up to the first dash; an id may hold dashes itself. -/
+def bare (hb : List String) : List String := hb.map fun h => match h.splitOn "-" with | _ :: rest@(_ :: _) => "-".intercalate rest | _ => h
 
 def learn (k : Knowledge) : IO Json := do
   let ex := (← traces).filter fun t => str (field t "kind") == "experience"

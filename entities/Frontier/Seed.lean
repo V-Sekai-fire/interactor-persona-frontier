@@ -28,12 +28,14 @@ def parse (text : String) : Except String Json := YamlLd.parseYaml text
 /-- A stream of seeds, as the Elixir caller sends them: YAML documents in order, one per seed. -/
 def parseAll (text : String) : Except String (List Json) := (YamlLd.parseAllYaml text).map (·.toList)
 
-/-- Objects merge key by key; anything else is replaced by the later seed. -/
+/-- Objects merge key by key; anything else is replaced by the later seed. A key set to null in a later seed
+is removed, which is how a seed drops what an earlier one added. -/
 partial def merge (a b : Json) : Json :=
   match a, b with
   | .obj _, .obj _ =>
     (entries b).foldl (fun acc (k, v) =>
-      acc.setObjVal! k (match acc.getObjVal? k with | .ok old => merge old v | .error _ => v)) a
+      if v == .null then Json.mkObj ((entries acc).filter fun (k2, _) => k2 != k)
+      else acc.setObjVal! k (match acc.getObjVal? k with | .ok old => merge old v | .error _ => v)) a
   | _, _ => b
 
 /-- The seeds in order, later over earlier. -/

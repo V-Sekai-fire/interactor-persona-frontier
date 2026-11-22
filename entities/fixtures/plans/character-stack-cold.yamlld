@@ -13,7 +13,7 @@ steps:
   - action: acquire-token-interactor-omnigen2-editscore-space
     duration: PT0S
     params: []
-  - action: settle-character-1
+  - action: settle-character-look-dev
     duration: PT0S
     params: []
   - action: acquire-token-interactor-trellis2-image-to-textured-mesh
@@ -22,7 +22,7 @@ steps:
   - action: acquire-token-contract-orbit-views
     duration: PT0S
     params: []
-  - action: settle-character-2
+  - action: settle-character-image-to-3d
     duration: PT0S
     params: []
   - action: acquire-token-interactor-anny-fit
@@ -37,7 +37,7 @@ steps:
   - action: acquire-token-sinew-mocap-measure
     duration: PT0S
     params: []
-  - action: settle-character-3
+  - action: settle-character-body
     duration: PT0S
     params: []
   - action: acquire-token-interactor-skintokens-auto-rig
@@ -52,7 +52,7 @@ steps:
   - action: acquire-token-contract-ggml-rd
     duration: PT0S
     params: []
-  - action: settle-character-4
+  - action: settle-character-gpu-skin
     duration: PT0S
     params: []
   - action: acquire-token-point-sam
@@ -76,7 +76,7 @@ steps:
   - action: acquire-token-interactor-bake
     duration: PT0S
     params: []
-  - action: settle-character-5
+  - action: settle-character-garments
     duration: PT0S
     params: []
   - action: acquire-token-interactor-slughorn
@@ -85,7 +85,7 @@ steps:
   - action: acquire-token-thorvg
     duration: PT0S
     params: []
-  - action: settle-character-6
+  - action: settle-character-look-render
     duration: PT0S
     params: []
   - action: acquire-token-interactor-kimodo-text-to-motion
@@ -97,7 +97,7 @@ steps:
   - action: acquire-token-interactor-motion-matching-guest
     duration: PT0S
     params: []
-  - action: settle-character-7
+  - action: settle-character-gpu-motion
     duration: PT0S
     params: []
   - action: acquire-token-sherpa-onnx-zipformer
@@ -109,7 +109,7 @@ steps:
   - action: acquire-token-silero-vad
     duration: PT0S
     params: []
-  - action: settle-character-8
+  - action: settle-character-face-voice
     duration: PT0S
     params: []
   - action: acquire-token-interactor-taskweft-persona
@@ -121,7 +121,7 @@ steps:
   - action: acquire-token-weftspun-character-taxonomy
     duration: PT0S
     params: []
-  - action: settle-character-9
+  - action: settle-character-persona
     duration: PT0S
     params: []
   - action: acquire-token-contract-command
@@ -133,7 +133,7 @@ steps:
   - action: acquire-token-godot-vrm
     duration: PT0S
     params: []
-  - action: settle-character-10
+  - action: settle-character-runtime
     duration: PT0S
     params: []
 temporal:

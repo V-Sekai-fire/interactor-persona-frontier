@@ -1,0 +1,175 @@
+# A stage is named by its own pointer segment instead of a number: /stage/<subject>-<id> in the plan state.
+# The old number stays as an alias, so a goal such as reach-character-10 still answers.
+stages:
+  "1": null
+  "2": null
+  "3": null
+  "4": null
+  "5": null
+  "6": null
+  "7": null
+  "8": null
+  "9": null
+  "10": null
+  "11": null
+  "12": null
+  "13": null
+  "14": null
+  "15": null
+  "16": null
+  look-dev:
+    alias: "1"
+    requires: []
+    tokens:
+      - omnigen2-editscore7b-v1.1
+      - interactor-omnigen2-editscore-space
+  image-to-3d:
+    alias: "2"
+    requires:
+      - look-dev
+    tokens:
+      - interactor-trellis2-image-to-textured-mesh
+      - contract-orbit-views
+  body:
+    alias: "3"
+    requires:
+      - image-to-3d
+    tokens:
+      - interactor-anny-fit
+      - interactor-headfit
+      - contract-anny-kernels
+      - sinew-mocap-measure
+  gpu-skin:
+    alias: "4"
+    requires:
+      - body
+    tokens:
+      - interactor-skintokens-auto-rig
+      - interactor-skintokens-guest
+      - interactor-cage
+      - contract-ggml-rd
+  garments:
+    alias: "5"
+    requires:
+      - gpu-skin
+    tokens:
+      - point-sam
+      - geosam2
+      - interactor-remesh
+      - interactor-garment-fit
+      - interactor-cloth-fit-guest
+      - interactor-drape
+      - interactor-bake
+  look-render:
+    alias: "6"
+    requires:
+      - image-to-3d
+      - garments
+    tokens:
+      - interactor-slughorn
+      - thorvg
+  gpu-motion:
+    alias: "7"
+    requires:
+      - gpu-skin
+    tokens:
+      - interactor-kimodo-text-to-motion
+      - interactor-motion-retarget
+      - interactor-motion-matching-guest
+  face-voice:
+    alias: "8"
+    requires:
+      - body
+      - gpu-skin
+    tokens:
+      - interactor-headfit
+      - sherpa-onnx-zipformer
+      - interactor-voice
+      - silero-vad
+  persona:
+    alias: "9"
+    requires:
+      - face-voice
+    tokens:
+      - interactor-taskweft-persona
+      - interactor-a2a
+      - weftspun-character-taxonomy
+  runtime:
+    alias: "10"
+    requires:
+      - look-render
+      - gpu-motion
+      - face-voice
+      - persona
+    tokens:
+      - contract-ggml-rd
+      - contract-command
+      - interactor-usd-guest
+      - godot-vrm
+  render:
+    alias: "11"
+    requires: []
+    tokens: []
+  judge:
+    alias: "12"
+    requires:
+      - render
+    tokens: []
+  report:
+    alias: "13"
+    requires:
+      - judge
+    tokens: []
+  sweep-render:
+    alias: "14"
+    requires: []
+    tokens: []
+  sweep-judge:
+    alias: "15"
+    requires:
+      - sweep-render
+    tokens: []
+  sweep-report:
+    alias: "16"
+    requires:
+      - sweep-judge
+    tokens: []
+subjects:
+  character:
+    stages:
+      - look-dev
+      - image-to-3d
+      - body
+      - gpu-skin
+      - garments
+      - look-render
+      - gpu-motion
+      - face-voice
+      - persona
+      - runtime
+  look:
+    stages:
+      - render
+      - judge
+      - report
+  prop:
+    stages:
+      - look-dev
+      - image-to-3d
+      - gpu-skin
+      - look-render
+      - gpu-motion
+      - runtime
+  series:
+    stages:
+      - sweep-render
+      - sweep-judge
+      - sweep-report
+  world:
+    stages:
+      - look-dev
+      - image-to-3d
+      - gpu-skin
+      - look-render
+      - gpu-motion
+      - runtime

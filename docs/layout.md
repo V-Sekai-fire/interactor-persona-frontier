@@ -4,7 +4,7 @@ What the README leaves out because it changes: file names, deployment and costs.
 
 ## What a goal is
 
-The things it makes are `character`, `prop` and `world`; a goal is one of those words, or one with a stage after it (`prop 7`, `character garments`, `reach-character-10`) to stop early. The answer is the exact ordered list of what to do: which stages to settle, in what order, from which repositories, with the durations measured so far. A goal the pipeline does not have is refused by name. Props and worlds run their own subsets of the stages, GPU-skinned like the characters.
+The things it makes are `character`, `prop` and `world`; a goal is one of those words, or one with a stage after it (`prop gpu-motion`, `character garments`, `reach-character-runtime`; the old numbers, `prop 7` and `reach-character-10`, still answer) to stop early. The answer is the exact ordered list of what to do: which stages to settle, in what order, from which repositories, with the durations measured so far. A goal the pipeline does not have is refused by name. Props and worlds run their own subsets of the stages, GPU-skinned like the characters.
 
 ## How it learns
 
