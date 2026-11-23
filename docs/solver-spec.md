@@ -8,6 +8,11 @@ published papers**. The implementation is a later step and is written from this 
 **How the sources were obtained.** Only open or documented copies. Pages that served a bot check or an invalid
 certificate were not bypassed. Text was extracted with a script (`pypdf` in a throwaway environment).
 
+**Turbo's licence.** Turbo (github.com/ptal/turbo) is Apache-2.0: the repository's `LICENSE` is the Apache License 2.0 and
+GitHub reports it. That permits reading and reusing its source with the notices the licence requires. The clean-room rule below is
+about CP-SAT, Chuffed and Gecode, not Turbo, but nothing of Turbo's source has been opened for this page either; it is
+described here from the paper and slides. Any later reuse of Turbo code is logged here.
+
 **The clean-room rule.** No source code of CP-SAT, Chuffed or Gecode was opened, by the author of this page or in
 any tool output shown while writing it. MiniZinc and the three solvers run as black-box oracles whose answers our
 solver is compared with; running a program is not reading it. One web search listed the source file of a Rust solver
@@ -28,7 +33,7 @@ numbers of the paper.
 | Gent et al., *A Review of Literature on Parallel Constraint Solving* (arXiv 1803.10981; the author list was not checked) | the portfolio and clause-sharing passages in sections 4.1 and 5.5 (extracted lines 366 to 410 and 815 to 860) | portfolio and sharing limits (W2) |
 | Schulte, Tack and Lagerkvist, *Modeling and Programming with Gecode*, version 6.2.0 (user documentation, not source code) | section 9.3 (search engines DFS, LDS, BAB; options), 9.4 to 9.4.2 and 9.4.5 (restart-based search, cutoff generators, large neighbourhood search through restarts), the start of 9.5 (portfolio of assets) | restarts and cutoffs (S1), branch and bound through `constrain` (S2), the portfolio and neighbourhood workers (W2, W3) |
 | Pisinger and Røpke, *Large Neighborhood Search*, Handbook of Metaheuristics, 2010 (DTU Orbit open copy) | the introduction and section 2 up to the destroy method (extracted lines 1 to 230 and 486 to 565): destroy and repair, Algorithm 1, acceptance rules, degree of destruction | the neighbourhood worker (W3) |
-| Talbot, slides of *A GPU-based Constraint Programming Solver*, AAAI 2026 (author's page, 32 slides) | all slides | the 2026 GPU design and its reported costs (G1 to G6). **The paper itself was not read** |
+| Talbot, *A GPU-based Constraint Programming Solver*, AAAI 2026, author's copy at ptal.github.io/papers/aaai2026.pdf (11 pages), and the author's 32 slides of the talk | the whole paper to the conclusion, and all the slides | the 2026 GPU design, its measured costs and results (G1 to G6, G10 to G14). Turbo's source (Apache-2.0, github.com/ptal/turbo) was **not opened** |
 | Talbot, slides *Turbo: Design of a Constraint Programming Solver on GPU*, LERIA talk (81 slides; the title slide says 9 January 2024, the file name says 2025), `/mnt/fire/talbot-leria-2025-slides.pdf` | all slides; one slide (Turbo versus Choco 4.15) is a chart image, so its numbers were not read | the parallel-propagation model and the ternary form with its measured cost (G1, G2, G5 to G9) |
 | Bit-Monnot, *Revisiting Optional Variables in Lazy Clause Generation Solvers for Flexible Scheduling*, CP 2026 (LIPIcs 379, CC BY 4.0) | the abstract, the introduction, and sections 2.1 to 2.3 (domains, presence literals, domain operations) | optional variables for tasks that may be absent (O1 to O3) |
 | Dekker, Ignatiev, Stuckey and Zhong, *Towards Modern and Modular SAT for LCG*, CP 2025 (LIPIcs 340) | the abstract only | that an LCG solver can sit on a replaceable SAT engine through the IPASIR-UP interface; nothing else is used |
@@ -43,9 +48,6 @@ numbers of the paper.
 - Shaw, *Using constraint programming and local search methods to solve vehicle routing problems* (CP 1998), the
   source of large neighbourhood search: closed access. LNS is taken from Pisinger and Røpke, who describe it, and
   from the Gecode documentation.
-- Talbot, *A GPU-based Constraint Programming Solver* (AAAI 2026): the full text. The AAAI page sits behind a bot
-  check, and the University of Luxembourg repository's server certificate does not verify; **neither was bypassed**.
-  Only the author's slides were read.
 - Chu's 2011 thesis (the design of Chuffed): the repository page did not load.
 - The GPU all-different paper (par.nsf.gov purl 10537139) and the GPU compact-table paper (arXiv 2507.18413, downloaded and
   not read), and Vilim's time-table-edge-finding paper.
@@ -172,12 +174,38 @@ From the Turbo papers as far as read (the 2022 paper in full where listed, the 2
 - **G5** Constraints are stored as a **ternary network** `x = y op z` with `op` in `+`, `/`, `*`, `mod`, `min`, `max`,
   `<=`, `=`, one constraint per thread, sorted by operator to reduce divergence; the slides report a 10-fold speed-up
   from this form.
-- **G6** The cost of that form, from the slides: on the 2024 MiniZinc Challenge instances the median growth is 4.45
-  times the variables and 4.34 times the propagators, and the maximum 336 and 731 times. Reported result, 98
-  instances of the 2024 Challenge with a 20-minute limit on an H100: "almost on par with Choco on the quality of found
-  objective bounds" and "can beat OR-Tools on some instances"; scores in the slides are OR-Tools 266.7 with 64 threads
-  and 119.9 with fixed search, Choco 190.8 and 49.3, Turbo 45.8 with fixed search. The slides give the number of
-  instances solved at the root as 81 on one slide and 91 on another; that inconsistency is theirs.
+- **G6** The cost of that form, from the paper's Table 1 against the constraint networks Choco gets: on 96 instances the
+  median growth is 4.74 times the variables and 4.46 times the constraints (the mean is 64.8 and 152, the maximum 1316 and
+  3912); without the `yumi-dynamic` instances (92 left) the median is 4.45 and 4.34 and the maximum 336 and 731. Those
+  instances are the worst case, because they use many global constraints. Result on the 100 instances of the 2024
+  Challenge, 20-minute limit, one H100: against Choco, the same objective on 48%, better on 23%, worse on 29%; against
+  OR-Tools, equal on 31%, better on 11%, worse on 58%. MiniZinc scores (Table 5): OR-Tools 266.7 with 64 threads and
+  119.9 sequential, Choco 190.8 and 49.3, Turbo 45.8; the parallel CPU versions outperform Turbo, and Turbo does better
+  on problems with few or no global constraints. The slides give the number of instances unsatisfiable at the root as 81 on one slide and
+  91 on another; the paper does not repeat that number, and says one instance was removed as unsatisfiable during the
+  conversion to FlatZinc and one `yumi-dynamic` instance as too large (15 of the 41 solver configurations in the Challenge
+  crashed on it and only 4 found a solution). (An earlier version of this page wrongly called the 11 / 31 / 58 percent figures unsupported; the paper states them.)
+- **G10** Representation (paper section 3): ternary constraints `x = y op z` with `op` in `+`, `*`, `/`, `mod`, `min`, `max`, `=`,
+  `<=`; subtraction is dropped because `x = y - z` is `y = x + z`; constants are variables, so every constraint is 16 bytes
+  (loaded as one `int4`); bytecodes are sorted on (operator, y, x, z) to reduce divergence, and there are 13 divergence
+  points because `=` and `<=` can be negated or reified. Global constraints are decomposed by the MiniZinc compiler before
+  this step.
+- **G11** Warp-centric fixpoint: a warp propagates 32 contiguous constraints to a local fixpoint before moving on, which
+  the paper reports as about +10% nodes per second; it is a fair schedule, so the fixpoint is unchanged.
+- **G12** Table 2 (20 instances, one per problem class): the ternary form explores about 7 times more nodes per second
+  than view-based propagators (103036 against 14623), needs 2.3 times more fixpoint iterations per node (13.9 against
+  6.1), uses far less propagator memory (0.69 against 10.33 MB) and more variable memory (286.5 against 76.6 KB).
+  `propagate` is 93% of GPU time on average. The authors' attempts at dynamic scheduling of propagators raised total time.
+- **G13** Search is "dive and solve", a lazy form of embarrassingly parallel search: blocks take subproblems at a depth `D`
+  given in the paper as `ceil(log2(blockDim.x * 300))` (ten times more subproblems than the usual 30 per thread; the
+  paper's `blockDim.x` there seems to mean the number of blocks, which I did not confirm), reach them by a backtrack-free dive
+  whose path is the bits of the subproblem index, skip a whole failed subtree by incrementing a prefix, share the best
+  objective bound through one atomic minimum, and restore state by recomputation from the root. Diving costs 0.01% of
+  the time. The dive must be deterministic, so adaptive branching such as weighted degree cannot be used while diving.
+  Load balance is poor at the timeout: about 85% of blocks idle on average.
+- **G14** Scaling (Table 4): nodes per second on the average of the instances, 94k on a Quadro RTX 5000 Max-Q, 207k on an
+  RTX A5000, 212k on a V100, 458k on an H100. Their memory figures: a domain store of 56 MB for the largest
+  `yumi-dynamic` instance, 2 MB on average, 110 KB median.
 
 From the earlier LERIA talk (January 2024), which gives the model and the measurements behind G5 and G6:
 - **G7** The propagator is a reductive, monotone function; a process is `x <- f(y1..yn)` joined into a store, with ask
