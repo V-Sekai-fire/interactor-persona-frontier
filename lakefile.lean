@@ -58,7 +58,7 @@ lean_lib «Entities» where
 
 lean_lib «Repositories» where
   srcDir := "repositories"
-  roots := #[`Frontier.Db]
+  roots := #[`Frontier.Db, `Frontier.Store]
 
 -- SQLite is vendored and compiled in; only libdl and libm are needed beside it on Linux.
 def sqliteLink : Array String :=
@@ -77,4 +77,11 @@ lean_exe «frontier» where
 lean_exe «frontier_witness» where
   srcDir := "entities/spec"
   root := `Witness
+  moreLinkArgs := sqliteLink
+
+-- The stored documents: migrate the database, print a stored domain or problem, plan a stored problem.
+@[default_target]
+lean_exe «frontier_store» where
+  srcDir := "transports"
+  root := `StoreMain
   moreLinkArgs := sqliteLink

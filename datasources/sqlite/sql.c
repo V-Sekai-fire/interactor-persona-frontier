@@ -74,6 +74,7 @@ LEAN_EXPORT lean_obj_res frontier_sql(b_lean_obj_arg db_s, b_lean_obj_arg sql_s)
   int rc = sqlite3_open_v2(db, &h, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_URI, NULL);
   if (rc != SQLITE_OK) { sb_str(&s, "{\"error\":"); sb_json(&s, h ? sqlite3_errmsg(h) : "open"); sb_str(&s, "}"); goto out; }
   sqlite3_busy_timeout(h, 5000);
+  sqlite3_exec(h, "PRAGMA foreign_keys=ON;", NULL, NULL, NULL);
   if (strstr(db, "vfs=weft_fdb")) sqlite3_exec(h, "PRAGMA journal_mode=MEMORY; PRAGMA locking_mode=EXCLUSIVE;", NULL, NULL, NULL);
   sb_str(&s, "{\"rows\":[");
   if (sqlite3_exec(h, sql, cb, &s, &err) != SQLITE_OK) {
