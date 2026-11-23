@@ -5,4 +5,4 @@ The standing rules of the Chibifire Hair Cards project are in the viewer reposit
 ## This repository
 
 - The planner. Compose methods from the actions that exist first; a new action only when no composition reaches the goal; a refused goal names the smallest set of missing actions.
-- Checks: `lake build frontier`, then the planner replay (`elixir /mnt/fire/3-interactor/interactor-hair-cards-viewer/tools/serve.exs replay`). Run the planner from the repository root with `FRONTIER_DB` set, and never call `/learn` or `/practice`: they write into the repository.
+- Checks: `nix flake check -L`, which builds the planner, runs the witness and runs the NixOS test with FoundationDB. CI runs the same command. The planner replay (`elixir /mnt/fire/3-interactor/interactor-hair-cards-viewer/tools/serve.exs replay`) is the second check. Run the planner from the repository root with `FRONTIER_DB` set, and never call `/learn` or `/practice`: they write into the repository.
