@@ -102,6 +102,15 @@ def optional (table column idColumn id : String) : IO (List (String × Json)) :=
 def header (name : String) : List (String × Json) :=
   [("@context", Json.mkObj [("VSEKAI", "https://v-sekai.org/"), ("domain", "VSEKAI:planning/domain/")]), ("name", Json.str name)]
 
+def domainVariablesJson (d : String) : IO (List (String × Json)) := do
+  let vs ← sql s!"SELECT v.name AS name, v.type AS type, COALESCE(x.description, '') AS description FROM domain_variable v LEFT JOIN domain_variable_description x ON x.domain_id = v.domain_id AND x.variable = v.name WHERE v.domain_id = {keyOf d} ORDER BY v.name;"
+  let inits ← sql s!"SELECT variable, key, value FROM domain_variable_init WHERE domain_id = {keyOf d} ORDER BY variable, key;"
+  let byVariable := grouped inits "variable" fun r => Json.mkObj [(field r "key", toJson (number r "value"))]
+  if vs.isEmpty then return []
+  pure [("variables", Json.arr (vs.map fun v =>
+    Json.mkObj ([("name", Json.str (field v "name")), ("type", Json.str (field v "type")),
+      ("init", Json.mkObj (pairsOf (lookupAll byVariable (field v "name"))))] ++ present "description" (field v "description"))))]
+
 def domainJson (name : String) : IO Json := do
   let (d, version) ← domainRow name
   let enums ← enumerations d
@@ -109,9 +118,10 @@ def domainJson (name : String) : IO Json := do
   let methods ← methodsJson d
   let description ← optional "domain_description" "description" "domain_id" d
   let source ← optional "domain_source" "source" "domain_id" d
+  let variables ← domainVariablesJson d
   pure (Json.mkObj (header name ++ [("@type", Json.str "domain:Definition"), ("version", Json.str version), ("enums", enums),
     ("actions", Json.mkObj actions), ("methods", Json.mkObj methods),
-    ("capabilities", Json.mkObj [("actions", Json.mkObj declared)])] ++ description ++ source))
+    ("capabilities", Json.mkObj [("actions", Json.mkObj declared)])] ++ description ++ source ++ variables))
 
 def variablesJson (p : String) : IO Json := do
   let vs ← sql s!"SELECT name, type FROM problem_variable WHERE problem_id = {keyOf p} ORDER BY name;"
@@ -171,6 +181,28 @@ def problemJson (name : String) : IO Json := do
     ("version", Json.str (field r "version")), ("variables", ← variablesJson p), ("todo_list", ← tasksJson p),
     ("capabilities", Json.mkObj [("entities", Json.mkObj (entities.map fun (n, cs) => (n, Json.arr cs.toArray))),
       ("graph", Json.mkObj [("edges", Json.arr (own ++ held_edges).toArray)])])] ++ optionals.flatten))
+
+/-- The stored plan of a problem, as the plan document: reached with its steps and timing, or refused. -/
+def planDocJson (problem : String) : IO Json := do
+  let some r ← one s!"SELECT hex(pl.id) AS id, p.name AS problem, d.name AS domain FROM plan pl JOIN problem p ON p.id = pl.problem_id JOIN domain d ON d.id = p.domain_id WHERE p.name = {quote problem};"
+    | throw (IO.userError s!"no plan for {problem}")
+  let id := field r "id"
+  let named ← optional "plan_name" "name" "plan_id" id
+  let base := header (field r "domain") |>.filter (·.1 != "name")
+  let head := base ++ [("@type", Json.str "domain:Plan"), ("domain", Json.str (field r "domain")), ("problem", Json.str problem)]
+  match ← one s!"SELECT reason FROM plan_refusal WHERE plan_id = {keyOf id};" with
+  | some x => pure (Json.mkObj (head ++ named ++ [("refused", Json.str (field x "reason"))]))
+  | none =>
+    let t ← one s!"SELECT consistent, total FROM plan_reached WHERE plan_id = {keyOf id};"
+    let steps ← sql s!"SELECT s.position AS position, a.name AS action, s.duration AS duration FROM plan_step s JOIN action a ON a.id = s.action_id WHERE s.plan_id = {keyOf id} ORDER BY s.position;"
+    let params ← sql s!"SELECT position, value FROM plan_step_parameter WHERE plan_id = {keyOf id} ORDER BY position, argument_position;"
+    let byStep := grouped params "position" fun p => Json.str (field p "value")
+    let temporal := match t with
+      | some x => Json.mkObj [("consistent", Json.bool (field x "consistent" == "1")), ("total", Json.str (field x "total"))]
+      | none => Json.null
+    pure (Json.mkObj (head ++ named ++ [("reached", Json.bool true), ("temporal", temporal),
+      ("steps", Json.arr (steps.map fun st => Json.mkObj [("action", Json.str (field st "action")), ("duration", Json.str (field st "duration")),
+        ("params", Json.arr (lookupAll byStep (field st "position")).toArray)]))]))
 
 /-- The plan for a stored problem, from the stored domain it belongs to. -/
 def plan (problem : String) : IO String := do

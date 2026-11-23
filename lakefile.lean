@@ -60,7 +60,7 @@ lean_lib «Entities» where
 
 lean_lib «Repositories» where
   srcDir := "repositories"
-  roots := #[`Frontier.Db, `Frontier.Store, `Frontier.PlanPackets]
+  roots := #[`Frontier.Db, `Frontier.Store, `Frontier.Import, `Frontier.PlanPackets]
 
 -- SQLite is vendored and compiled in; only libdl and libm are needed beside it on Linux.
 def sqliteLink : Array String :=

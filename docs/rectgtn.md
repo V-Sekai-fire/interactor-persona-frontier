@@ -54,6 +54,7 @@ desired value of a binding is a JSON scalar in a `desired` column.
 | domain `name`, `version` | `domain` |
 | domain `description`, `source` | `domain_description`, `domain_source` (a satellite row only when present) |
 | `enums` | `enumeration`, `enumeration_member` |
+| domain `variables` | `domain_variable`, `domain_variable_description`, `domain_variable_init` |
 | `actions.<name>` | `action`, `action_duration` (absent means instantaneous), `action_description`, `action_operation`, `action_duration_basis` |
 | action `params` | `action_parameter`; a parameter that names an enumeration also has a row in `action_parameter_enumeration` |
 | action `body` | `action_step`, one JSON step per row, in order |
@@ -99,10 +100,22 @@ instead of its value, the goal is `unreachable`. Without the guard, any entity c
 The older `"capabilities": {"entities": ..., "actions": ...}` form of the original page is not read by
 the planner. The importer maps it to the rows above, and the exporter writes `"entities": {}`.
 
-**Status.** The loader is `repositories/Frontier/Store.lean`; `frontier_store plan PROBLEM` runs it.
-It always writes both forms from the same rows, with no switch. On a test database, a problem whose
-entity holds `fly` plans the move, and a problem whose entity does not hold it is `unreachable`. The
-importer (JSON-LD into rows) is not written yet, so that test database was filled by hand.
+**Status.** The loader is `repositories/Frontier/Store.lean` and the importer is `repositories/Frontier/Import.lean`;
+`frontier_store plan PROBLEM` plans a stored problem and `frontier_store import FILE...` stores JSON-LD documents.
+The loader always writes both forms from the same rows, with no switch. On a test database, a problem whose
+entity holds `fly` plans the move, and a problem whose entity does not hold it is `unreachable`.
+
+The importer refuses what the tables cannot hold, instead of storing half of it: a domain with
+`capabilities.actions`, a problem with `capabilities.entities`, and a plan with a step that is not an action of
+its domain. No fixture uses the two capability forms, so capability rows are tested only with the hand-built case.
+
+`frontier_store fixtures entities`, on a new database, imports every fixture and checks two things for each: the plan
+the planner gives from the tables equals the plan it gives from the files, and a stored plan document comes
+back as the file it came from. A damaged stored action changes the plan (a control run: deleting the steps of
+`move` makes the fixture problem `unreachable`). Two inconsistencies in the fixtures are reported, not hidden: the plan
+`character-stack-cold` names the problem `gate` while the problem file is named `character_stack_cold`, so
+plans are paired with problems by file name; and the plan `world-cold` records a step that the current
+`character-stack` domain does not have, so it is skipped as stale.
 
 ## Temporal duration (T)
 
