@@ -5,6 +5,9 @@
 This page is the design for a solver of `entities/fixtures/minizinc/party-saga/party-saga.mzn`, written **only from
 published papers**. The implementation is a later step and is written from this page, not from any solver's code.
 
+**How the sources were obtained.** Only open or documented copies. Pages that served a bot check or an invalid
+certificate were not bypassed. Text was extracted with a script (`pypdf` in a throwaway environment).
+
 **The clean-room rule.** No source code of CP-SAT, Chuffed or Gecode was opened, by the author of this page or in
 any tool output shown while writing it. MiniZinc and the three solvers run as black-box oracles whose answers our
 solver is compared with; running a program is not reading it. One web search listed the source file of a Rust solver
@@ -23,23 +26,32 @@ numbers of the paper.
 | Perron, Didier and Gay, *The CP-SAT-LP Solver*, invited talk, CP 2023 (LIPIcs 280, 3:1 to 3:2, CC BY 4.0) | the whole abstract | the shape of a CP-SAT-style solver and its workers (W1 to W3) |
 | Talbot, Pinel and Bouvry, *A Variant of Concurrent Constraint Programming on GPU* (arXiv 2207.12116) | the abstract, the introduction, the lattice and PCCP definitions (extracted lines 1 to 210) | the GPU propagation model (G1 to G4) |
 | Gent et al., *A Review of Literature on Parallel Constraint Solving* (arXiv 1803.10981; the author list was not checked) | the portfolio and clause-sharing passages in sections 4.1 and 5.5 (extracted lines 366 to 410 and 815 to 860) | portfolio and sharing limits (W2) |
+| Schulte, Tack and Lagerkvist, *Modeling and Programming with Gecode*, version 6.2.0 (user documentation, not source code) | section 9.3 (search engines DFS, LDS, BAB; options), 9.4 to 9.4.2 and 9.4.5 (restart-based search, cutoff generators, large neighbourhood search through restarts), the start of 9.5 (portfolio of assets) | restarts and cutoffs (S1), branch and bound through `constrain` (S2), the portfolio and neighbourhood workers (W2, W3) |
+| Pisinger and Røpke, *Large Neighborhood Search*, Handbook of Metaheuristics, 2010 (DTU Orbit open copy) | the introduction and section 2 up to the destroy method (extracted lines 1 to 230 and 486 to 565): destroy and repair, Algorithm 1, acceptance rules, degree of destruction | the neighbourhood worker (W3) |
+| Talbot, slides of *A GPU-based Constraint Programming Solver*, AAAI 2026 (author's page, 32 slides) | all slides | the 2026 GPU design and its reported costs (G1 to G6). **The paper itself was not read** |
+| Bit-Monnot, *Revisiting Optional Variables in Lazy Clause Generation Solvers for Flexible Scheduling*, CP 2026 (LIPIcs 379, CC BY 4.0) | the abstract, the introduction, and sections 2.1 to 2.3 (domains, presence literals, domain operations) | optional variables for tasks that may be absent (O1 to O3) |
+| Dekker, Ignatiev, Stuckey and Zhong, *Towards Modern and Modular SAT for LCG*, CP 2025 (LIPIcs 340) | the abstract only | that an LCG solver can sit on a replaceable SAT engine through the IPASIR-UP interface; nothing else is used |
 
 **Not read.**
 - Ohrimenko, Stuckey and Codish, *Propagation via lazy clause generation* (Constraints 2009) and its CP 2007
-  version: the author's site refused automated downloads and the journal is paywalled. What this page says about
-  lazy clause generation comes from the arXiv papers above, which describe it.
-- Feydy and Stuckey, *Lazy clause generation reengineered* (CP 2009): not fetched.
-- *Modeling and Programming with Gecode*: not read. Gecode is represented here only through the engine paper.
+  version: the author's site refused automated downloads (a bot check, not bypassed) and the journal is paywalled;
+  OpenAlex lists it as closed access. The 2026 retrospective on lazy clause generation (Constraints, hybrid open
+  access) returned a bot-check page instead of the PDF. What this page says about lazy clause generation comes
+  from the arXiv papers above, which describe it.
+- Feydy and Stuckey, *Lazy clause generation reengineered* (CP 2009): closed access.
 - Shaw, *Using constraint programming and local search methods to solve vehicle routing problems* (CP 1998), the
-  source of large neighbourhood search: not fetched. W3 uses only the name and the one-sentence idea in the talk
-  abstract; the neighbourhoods are this page's own.
-- Talbot, *A GPU-based Constraint Programming Solver* (AAAI 2026): the download failed. Only a search-result
-  summary was seen: no global constraints, no nogood learning, no lazy clause generation, and a reported
-  comparison with OR-Tools (better on about 11% of instances, equal on 31%, worse on 58%). That summary is not a
-  reading of the paper, and the numbers should be checked against it.
-- The GPU all-different and compact-table papers (par.nsf.gov purl 10537139, arXiv 2507.18413): the second was
-  downloaded but not read; the first was not fetched.
-- Vilim's time-table-edge-finding paper, and the parts of the papers above not listed as read.
+  source of large neighbourhood search: closed access. LNS is taken from Pisinger and Røpke, who describe it, and
+  from the Gecode documentation.
+- Talbot, *A GPU-based Constraint Programming Solver* (AAAI 2026): the full text. The AAAI page sits behind a bot
+  check, and the University of Luxembourg repository's server certificate does not verify; **neither was bypassed**.
+  Only the author's slides were read.
+- Chu's 2011 thesis (the design of Chuffed): the repository page did not load.
+- The GPU all-different paper (par.nsf.gov purl 10537139) and the GPU compact-table paper (arXiv 2507.18413, downloaded and
+  not read), and Vilim's time-table-edge-finding paper.
+- *From Literals to Atomic Constraints* (CP 2026, LIPIcs.CP.2026.42): only its first lines were opened. Its abstract says the
+  analysis of Chuffed and OR-Tools in it rests on source inspection by its authors, which is one more reason not
+  to build on it here.
+- The parts of the papers above not listed as read, and the Gecode book outside the sections listed.
 
 ## What the solver has to decide
 
@@ -95,10 +107,17 @@ the table for the GPU step (G3).
 - **S1 Branching.** On a start time, the choice `start = lb` or `start >= lb + 1`, the general scheme named in the
   engine paper; for Booleans, value order from the incumbent. Activity-based branching and restarts are named in
   the lazy clause generation papers as benefits of learning; their exact rules were **not read** and are chosen
-  here: a conflict-driven score, geometric restarts, nogoods kept across restarts.
+  here: a conflict-driven score and nogoods kept across restarts. **Restarts** follow the Gecode documentation:
+  search is stopped when a cutoff counted in failures is reached and restarted on a re-configured problem, with a
+  geometric cutoff sequence `s * b^i` or a Luby sequence (1, 1, 2, 1, 1, 2, 4, ...) scaled by `s`; the same
+  documentation names AFC and action as branching heuristics whose statistics a restart can use (their definitions
+  were not read).
 - **S2 Branch and bound.** After a solution with objective `o`, post `objective < o` and continue (explanation
   paper, section 2). The RCPSP/LCG paper writes the improving constraint as `o <= theta(o)` in one passage; this
   page uses the strict form, as the explanation paper does, and the discrepancy is noted here.
+- **S2b Branch and bound with restarts.** Gecode's `BAB` engine adds the better-solution constraint (`constrain`) to the
+  remaining search, and the restart meta engine runs a `BAB` engine for each restart; the documentation says this is the
+  combination to use for a best solution (sections 9.3 and 9.4.1).
 - **S3 Completeness.** The search is complete: it proves optimality when the queue and the branching are exhausted
   with the bound posted.
 
@@ -109,26 +128,59 @@ local search or large neighbourhood search, improve dual bounds, or probe to shr
 shared between workers.
 
 - **W1 Complete worker:** the core above with learning.
-- **W2 Several complete workers** with different branching order and restart rules, sharing the incumbent
-  objective and short learned clauses. The survey shows sharing short learned clauses is a known approach for SAT
-  portfolios and that it needs a length limit; the limit here is a tunable and not from a source.
-- **W3 Neighbourhood worker:** fix a subset of the incumbent's decisions and search the rest with a small time
-  limit; neighbourhoods by character, by zone and by time window (this page's own).
+- **W2 Several complete workers** with different branching order and restart rules. The Gecode documentation
+  describes a portfolio as several copies of the same problem, each an asset, usually with a different branching
+  heuristic, run to make finding a solution more likely and the search more robust (section 9.5). They share the
+  incumbent objective; sharing short learned clauses is a known approach for SAT portfolios and needs a length limit
+  (survey, section 4.1), and the limit here is a tunable and not from a source.
+- **W3 Neighbourhood worker (large neighbourhood search).** Pisinger and Røpke: an incumbent is improved by
+  alternately destroying part of it and repairing it, `x' = repair(destroy(x))`, accepting `x'` by a rule (only
+  improving, or a simulated-annealing rule with a falling temperature), keeping the best, and stopping on a limit;
+  the destroy step is random and has a degree of destruction (their example removes 15% of the customers). Gecode
+  documents the same idea through restarts: keep part of the best solution, search for a better one within a cutoff,
+  and either stop or retry at random when the cutoff is reached (section 9.4.5). For Party Saga, destroy means
+  releasing the decisions of some tasks and leaving the rest fixed to the incumbent; the neighbourhoods are **this
+  page's own**: the tasks of one character, of one zone, or of one time window.
+
+## Optional tasks
+
+In Party Saga a task may be absent (`done[t]` false) and then has no start, duration or arms. The MiniZinc model
+encodes that as "start 0, duration 0". Bit-Monnot's formalism is the better fit for a solver built from this page:
+- **O1** Every variable has a presence literal; a variable with the literal true is mandatory. A variable's domain
+  is its bounds plus the value "absent" (section 2.2).
+- **O2** Entailment of a bound literal `[y <= v]` means that **if** the variable is present then it is at most `v`;
+  it does not rule out absence (section 2.3).
+- **O3** Tightening a bound of an absent variable is a no-op; tightening the bound of a present variable past its
+  other bound makes it absent when it is optional, and fails when it is mandatory (the `SetUB` operation).
+Chosen here: the start, duration and arm of task `t` get the presence literal `done[t]`, and `part[c, t]` is a
+mandatory Boolean. The paper's own solver (Aries, on GitHub) was not opened.
 
 ## GPU
 
-From the Turbo paper, as far as read:
+From the Turbo papers as far as read (the 2022 paper in full where listed, the 2026 work through its slides):
 - **G1** Propagation is a fixpoint over lattices, run without locks: propagators are monotone functions that join
-  into shared variables, and the result is the same whether the fixpoint is computed in parallel or in sequence.
-- **G2** The loop is "eventless": every propagator runs each round until nothing changes, in the manner of AC-1,
-  because event queues do not suit the hardware.
-- **G3** The paper has no global constraints and no learning, and says the solver is a proof of concept; it points to
-  decomposition for globals. A search summary of the 2026 paper (not read) says lazy clause generation is harder on
-  a GPU. A GPU worker for Party Saga would therefore be a propagation-only worker.
-- **G4** The paper reports running a subproblem per thread is not efficient on a GPU, because the cache per thread is small.
+  into shared variables, and the result is the same whether the fixpoint is computed in parallel or in sequence. The
+  slides add: strict updates (a bound changes only if the new value is tighter) and fair scheduling keep it deterministic.
+- **G2** The loop is "eventless": every propagator runs each round until nothing changes, in the manner of AC-1
+  (slides: a block-wide loop with a changed flag and barriers).
+- **G3** No global constraints, no learning, no lazy clause generation, no restarts, no event-based propagation
+  (slides, conclusion). A GPU worker for Party Saga would therefore be a propagation-only worker.
+- **G4** One subproblem per thread takes too much memory (the slides: a 1 MB problem times 135 168 threads); search
+  is split into subproblems with one per GPU block, and more subproblems than multiprocessors for load balance
+  (embarrassingly parallel search).
+- **G5** Constraints are stored as a **ternary network** `x = y op z` with `op` in `+`, `/`, `*`, `mod`, `min`, `max`,
+  `<=`, `=`, one constraint per thread, sorted by operator to reduce divergence; the slides report a 10-fold speed-up
+  from this form.
+- **G6** The cost of that form, from the slides: on the 2024 MiniZinc Challenge instances the median growth is 4.45
+  times the variables and 4.34 times the propagators, and the maximum 336 and 731 times. Reported result, 98
+  instances of the 2024 Challenge with a 20-minute limit on an H100: "almost on par with Choco on the quality of found
+  objective bounds" and "can beat OR-Tools on some instances"; scores in the slides are OR-Tools 266.7 with 64 threads
+  and 119.9 with fixed search, Choco 190.8 and 49.3, Turbo 45.8 with fixed search. The slides give the number of
+  instances solved at the root as 81 on one slide and 91 on another; that inconsistency is theirs.
 
-P1, P4 and P6 are sums and differences over integers and Booleans and fit that model; P2 and P3 do not fit without decomposition.
-A GPU worker is only worth building if CPU results show propagation, not learning, is the cost. That is a measurement for the
+For Party Saga: P1, P4 and P6 are sums and differences and fit the ternary form. P2 (a three-way disjunction with
+travel and cooldown) and P3 (the cumulative) do not fit without decomposition, which G6 says can be large. A GPU worker
+is only worth building if CPU results show propagation, not learning, is the cost. That is a measurement for the
 frontier loop, not an assumption.
 
 ## Implementation outline (Lean 4, not started)
@@ -142,6 +194,6 @@ loop proved, and `party_saga.exs frontier --solver ours` places its frontier nex
 ## What this page does not claim
 
 It does not claim the design will beat CP-SAT, Chuffed or Gecode; the expected first result is a lower frontier.
-It does not claim the choices marked "chosen here" come from a paper. And it is only as complete as the sources
-read: the lazy clause generation papers by Ohrimenko, Stuckey and Codish, and by Feydy and Stuckey, would be read
-next if they can be obtained.
+It does not claim the choices marked "chosen here" or "this page's own" come from a paper. And it is only as complete
+as the sources read: the two original lazy clause generation papers and Shaw's paper are closed access, and the
+full Turbo 2026 paper is behind checks that were not bypassed.
