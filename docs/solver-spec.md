@@ -236,8 +236,9 @@ frontier loop, not an assumption.
 
 **Local Turbo experiment (parked).** Turbo was built here (outside the repository, in `/mnt/fire/6-datasource/turbo-build`, with its own
 `PARKED.md` and a re-runnable `control/control.sh`). Its CPU mode solves two known-answer controls and our smallest test
-correctly (objective 6, as CP-SAT and Gecode give). Its GPU modes did not run on those same controls while another job held
-about 23 of the 24.5 GB on the GPU, so no GPU frontier exists yet; Turbo's source was not opened.
+correctly (objective 6, as CP-SAT and Gecode give). Its GPU modes did not run on those same controls, either while other jobs held
+about 23 of the 24.5 GB on the GPU or with 9 GB free, so memory pressure alone does not explain it and the cause is open; no GPU
+frontier exists yet. Turbo's source was not opened.
 
 ## Implementation outline (Lean 4, not started)
 
