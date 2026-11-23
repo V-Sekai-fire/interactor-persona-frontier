@@ -6,6 +6,8 @@ package «frontier» where
 
 -- The planner and its JSON-LD domain reader, as a library.
 require persona from git "https://github.com/V-Sekai-fire/interactor-taskweft-persona" @ "main"
+-- The integral fabric entity packet, MIT: the command packets the plan is sent as.
+require entity_packet from git "https://github.com/V-Sekai-fire/contract-entity-packet" @ "fe7a9627a9b23134f998a50cd854e9cc6743c536"
 
 -- YAML-LD in and out: the fixtures and domains in entities/ are .yamlld only.
 require «lean-yaml-ld» from git "https://github.com/V-Sekai-fire/lean-yaml-ld" @ "main"
@@ -58,7 +60,7 @@ lean_lib «Entities» where
 
 lean_lib «Repositories» where
   srcDir := "repositories"
-  roots := #[`Frontier.Db, `Frontier.Store]
+  roots := #[`Frontier.Db, `Frontier.Store, `Frontier.PlanPackets]
 
 -- SQLite is vendored and compiled in; only libdl and libm are needed beside it on Linux.
 def sqliteLink : Array String :=
@@ -84,4 +86,11 @@ lean_exe «frontier_witness» where
 lean_exe «frontier_store» where
   srcDir := "transports"
   root := `StoreMain
+  moreLinkArgs := sqliteLink
+
+-- A plan's steps as 100-byte entity packets, decoded back and checked.
+@[default_target]
+lean_exe «frontier_packets» where
+  srcDir := "transports"
+  root := `PacketsMain
   moreLinkArgs := sqliteLink
