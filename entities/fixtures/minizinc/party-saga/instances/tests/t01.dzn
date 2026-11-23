@@ -1,0 +1,10 @@
+nn = 2; ne = 1; from = [1]; to = [2]; length = [3]; terrain = [LAND];
+nc = 1; home = [1]; has_mode = array2d(1..1, MODE, [true, false, false, false]);
+arm_reach = [5]; stride = [100]; can_perform = [false]; role = [DAMAGE]; slots = [0]; cooldown = [0];
+nk = 0; crystal_element = [];
+nt = 1; kind = [SCOUT]; at = [2]; zone = [1]; required = [true];
+duration = array2d(1..1, RECIPE, [2, 4]); reach_needed = [1];
+need_role = array2d(1..1, ROLE, [0, 0, 0, 0]); need_art = array2d(1..1, ELEMENT, [false, false, false, false]);
+points = [0]; min_points = [0]; bonus = [0]; release = [0]; deadline = [1000];
+nz = 1; zone_capacity = [2]; np = 0; before = []; after = [];
+climb_min_reach = 3; blink_range = 2; time_weight = 1; point_weight = 0;

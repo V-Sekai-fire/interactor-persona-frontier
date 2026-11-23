@@ -1,0 +1,24 @@
+[Unit]
+Description=Party Saga frontier loop and three-solver agreement (oneshot)
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+TimeoutStartSec=0
+User=fire
+WorkingDirectory=/mnt/fire/3-interactor/interactor-persona-frontier
+Environment=HOME=/home/fire
+Environment=PATH=/home/fire/.pixi/bin:/usr/local/bin:/usr/bin:/bin
+Environment=ELIXIR_ERL_OPTIONS=+fnu
+Environment=STEPS=20
+Environment=LIMIT=15
+Nice=19
+CPUWeight=10
+CPUQuota=100%
+IOSchedulingClass=idle
+MemoryHigh=3G
+MemoryMax=4G
+MemorySwapMax=0
+ExecStart=/usr/bin/bash /mnt/fire/3-interactor/interactor-persona-frontier/tools/party_saga_run.sh
+StandardOutput=append:/mnt/fire/3-interactor/interactor-persona-frontier/entities/fixtures/minizinc/party-saga/run.log
+StandardError=append:/mnt/fire/3-interactor/interactor-persona-frontier/entities/fixtures/minizinc/party-saga/run.log
