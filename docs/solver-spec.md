@@ -234,6 +234,11 @@ against 17) both hit a model with a many-way disjunction and a cumulative. A GPU
 is only worth building if CPU results show propagation, not learning, is the cost. That is a measurement for the
 frontier loop, not an assumption.
 
+**Local Turbo experiment (parked).** Turbo was built here (outside the repository, in `/mnt/fire/6-datasource/turbo-build`, with its own
+`PARKED.md` and a re-runnable `control/control.sh`). Its CPU mode solves two known-answer controls and our smallest test
+correctly (objective 6, as CP-SAT and Gecode give). Its GPU modes did not run on those same controls while another job held
+about 23 of the 24.5 GB on the GPU, so no GPU frontier exists yet; Turbo's source was not opened.
+
 ## Implementation outline (Lean 4, not started)
 
 Modules under `repositories/Frontier/Solver/`: `Domain`, `Engine` (E1 to E4), `Propagators` (P1 to P7), `Learn`
