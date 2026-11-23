@@ -29,6 +29,7 @@ numbers of the paper.
 | Schulte, Tack and Lagerkvist, *Modeling and Programming with Gecode*, version 6.2.0 (user documentation, not source code) | section 9.3 (search engines DFS, LDS, BAB; options), 9.4 to 9.4.2 and 9.4.5 (restart-based search, cutoff generators, large neighbourhood search through restarts), the start of 9.5 (portfolio of assets) | restarts and cutoffs (S1), branch and bound through `constrain` (S2), the portfolio and neighbourhood workers (W2, W3) |
 | Pisinger and Røpke, *Large Neighborhood Search*, Handbook of Metaheuristics, 2010 (DTU Orbit open copy) | the introduction and section 2 up to the destroy method (extracted lines 1 to 230 and 486 to 565): destroy and repair, Algorithm 1, acceptance rules, degree of destruction | the neighbourhood worker (W3) |
 | Talbot, slides of *A GPU-based Constraint Programming Solver*, AAAI 2026 (author's page, 32 slides) | all slides | the 2026 GPU design and its reported costs (G1 to G6). **The paper itself was not read** |
+| Talbot, slides *Turbo: Design of a Constraint Programming Solver on GPU*, LERIA talk (81 slides; the title slide says 9 January 2024, the file name says 2025), `/mnt/fire/talbot-leria-2025-slides.pdf` | all slides; one slide (Turbo versus Choco 4.15) is a chart image, so its numbers were not read | the parallel-propagation model and the ternary form with its measured cost (G1, G2, G5 to G9) |
 | Bit-Monnot, *Revisiting Optional Variables in Lazy Clause Generation Solvers for Flexible Scheduling*, CP 2026 (LIPIcs 379, CC BY 4.0) | the abstract, the introduction, and sections 2.1 to 2.3 (domains, presence literals, domain operations) | optional variables for tasks that may be absent (O1 to O3) |
 | Dekker, Ignatiev, Stuckey and Zhong, *Towards Modern and Modular SAT for LCG*, CP 2025 (LIPIcs 340) | the abstract only | that an LCG solver can sit on a replaceable SAT engine through the IPASIR-UP interface; nothing else is used |
 
@@ -178,8 +179,30 @@ From the Turbo papers as far as read (the 2022 paper in full where listed, the 2
   and 119.9 with fixed search, Choco 190.8 and 49.3, Turbo 45.8 with fixed search. The slides give the number of
   instances solved at the root as 81 on one slide and 91 on another; that inconsistency is theirs.
 
+From the earlier LERIA talk (January 2024), which gives the model and the measurements behind G5 and G6:
+- **G7** The propagator is a reductive, monotone function; a process is `x <- f(y1..yn)` joined into a store, with ask
+  (`if b then P`), local variables and parallel composition, no recursion. Theorem on the slides: the fixpoints of a
+  program run in parallel and of the same program run in sequence are the same, so the sequential CPU fixpoint loop and
+  the GPU loop give one answer. The memory needs are three: atomic loads and stores, caches that eventually agree,
+  and no values appearing from nowhere. The slides also name the properties that the program can be stopped and
+  restarted on partial data, and that threads can be added.
+- **G8** The ternary normal form on the slides is `x = y op z` with `op` in `+`, `-`, `/`, `*`, `%`, `min`, `max`,
+  `<=`, `=`, held as 16 bytes (an operator and three variable ids), sorted by operator. The example given: `x + y != 2`
+  becomes `t1 = x + y` and `ZERO = (t1 = TWO)` with two constant variables. Measured on 16 MiniZinc instances against a
+  tree-shaped representation: fixpoint iterations per second +553%, nodes per second only +18%, fixpoint iterations per
+  node +138% (40 instead of 17), propagator memory -90%, variable memory +718%. Growth for single problems (variables,
+  constraints): team-assignment 2.2 and 1.8 times, generalized-peacable-queens 6.9 and 3.1, spot5 19.8 and 3.6, accap 5.2
+  and 3, wordpress 139 and 4.
+- **G9** Parallel propagation has not worked well on a CPU (the survey is cited), while parallel search over
+  independent subproblems scales almost linearly there; on a GPU one subproblem per thread needs too much memory, so
+  there is one per block. In progress on the slides: waking only the propagators whose inputs changed, using sparse
+  matrix and scan operations, to avoid running every propagator each round; and a table domain that generalises global
+  constraints.
+
 For Party Saga: P1, P4 and P6 are sums and differences and fit the ternary form. P2 (a three-way disjunction with
-travel and cooldown) and P3 (the cumulative) do not fit without decomposition, which G6 says can be large. A GPU worker
+travel and cooldown) and P3 (the cumulative) do not fit without decomposition, which G6 says can be large. G7 to G9
+add a second reason for caution: the growth in variables and the slow convergence of the eventless loop (40 rounds per node
+against 17) both hit a model with a many-way disjunction and a cumulative. A GPU worker
 is only worth building if CPU results show propagation, not learning, is the cost. That is a measurement for the
 frontier loop, not an assumption.
 
