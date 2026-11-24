@@ -22,7 +22,7 @@ def main (args : List String) : IO UInt32 := do
       IO.println s!"constraints_after_eval={F.numConstraints p.formula}"
       IO.println s!"output_vars={p.out.vars.size}"
       IO.println s!"output_arrays={p.out.arrays.size}"
-      let (tnf, extra) := normalizeWith (ternarizeFormula p.formula #[0, 1, 2]) #[]
+      let (tnf, extra) := normalizeWith (ternarizeFormula (F.withMinimizeObjective p.formula) #[0, 1, 2]) #[]
       IO.println s!"tnf_variables={F.numQuantifiedVars tnf}"
       IO.println s!"tnf_constraints={numTnfConstraints tnf}"
       let d := preprocessTcn tnf extra
@@ -47,7 +47,7 @@ def main (args : List String) : IO UInt32 := do
     match parseFlatzinc bytes with
     | .error e => IO.eprintln s!"Could not parse input file: {e}"; return 1
     | .ok p =>
-      let tnf := (normalizeWith (ternarizeFormula p.formula #[0, 1, 2]) #[]).1
+      let tnf := (normalizeWith (ternarizeFormula (F.withMinimizeObjective p.formula) #[0, 1, 2]) #[]).1
       let out ← IO.getStdout
       for l in toLines tnf do out.putStrLn l
       return 0
@@ -56,7 +56,7 @@ def main (args : List String) : IO UInt32 := do
     match parseFlatzinc bytes with
     | .error e => IO.eprintln s!"Could not parse input file: {e}"; return 1
     | .ok p =>
-      let (tnf, extra) := normalizeWith (ternarizeFormula p.formula #[0, 1, 2]) #[]
+      let (tnf, extra) := normalizeWith (ternarizeFormula (F.withMinimizeObjective p.formula) #[0, 1, 2]) #[]
       let out ← IO.getStdout
       out.putStr (preprocessTcn tnf extra).text
       return 0
@@ -66,7 +66,7 @@ def main (args : List String) : IO UInt32 := do
     | .error e => IO.eprintln s!"Could not parse input file: {e}"; return 1
     | .ok p =>
       for w in p.warnings do IO.eprintln w
-      let (tnf, extra) := normalizeWith (ternarizeFormula p.formula #[0, 1, 2]) #[]
+      let (tnf, extra) := normalizeWith (ternarizeFormula (F.withMinimizeObjective p.formula) #[0, 1, 2]) #[]
       let d := preprocessTcn tnf extra
       let values := parseResult (← IO.FS.readFile result)
       let out ← IO.getStdout
