@@ -23,6 +23,7 @@ def cStop := 9
 def cNextSubproblem := 10
 def cApproxBest := 11
 def cError := 12
+def cSliceNodes := 13
 -- per-block state
 def sDepth := 0
 def sStrategy := 1
@@ -40,9 +41,19 @@ def sBot := 12
 def sLeaf := 13
 def sStop := 14
 def sRemaining := 15
+def sPhase := 16
+def sInner := 17
+def sYield := 18
+def sSliceStart := 19
+-- phases of the block loop; 0 is a block that has not started
+def phaseStart := 1
+def phaseDive := 2
+def phaseSearch := 3
+def phaseNext := 4
+def phaseDone := 5
 
 def ctl (k : Nat) : E := .index (v "control") (.litUint k)
-def stateAt (k : Nat) : E := .index (v "state") (add (mul (v "b") (n 16)) (n k))
+def stateAt (k : Nat) : E := .index (v "state") (add (mul (v "b") (n 24)) (n k))
 def setState (k : Nat) (e : E) : S := .assign (stateAt k) e
 def bump (k : Nat) : S := setState k (add (stateAt k) (n 1))
 def vars : E := ctl cVariables
@@ -260,7 +271,7 @@ def backtrack : List S :=
   [setState sDepth (.index (v "decisions")
      (add (mul (add (mul (v "b") (ctl cMaxDepth)) (sub decDepth (n 1))) (n 8))
           (add (n fRope0) (decAt (sub decDepth (n 1)) fCurrent)))),
-   .ifThen (eq decDepth (neg (n 1))) [.assign (v "inner") (.litBool false)]
+   .ifThen (eq decDepth (neg (n 1))) [setState sInner (n 0)]
      [copyStore "snap_lower" "snap_upper" "lower" "upper" blockBase blockBase,
       setState sBot (n 0),
       .declInit bool "again" (.litBool true),
@@ -283,7 +294,7 @@ def solveStep : List S :=
           [.expr (call "embed_b" [v "b", decVar (sub decDepth (n 1)), call "next_child" [v "b", sub decDepth (n 1)]])]
           [setState sLeaf (n 1), setState sExhaustive (n 0)]],
      when (eq (stateAt sLeaf) (n 1))
-       [.ifThen (eq decDepth (n 0)) [.assign (v "inner") (.litBool false)] backtrack]]]
+       [.ifThen (eq decDepth (n 0)) [setState sInner (n 0)] backtrack]]]
 
 def diveStep : List S :=
   [.expr (call "propagate" [v "b"]),
@@ -294,27 +305,60 @@ def diveStep : List S :=
          .expr (call "embed_b" [v "b", decVar (n 0), call "child" [v "b", n 0, v "branch"]])]
         [setState sLeaf (n 1), setState sExhaustive (n 0)]]]
 
+/-- Stop this slice after the node budget (`control[13]`, 0 for none) is used. -/
+def sliceCheck : S :=
+  when (land (gt (ctl cSliceNodes) (n 0)) (ge (sub (stateAt sNodes) (stateAt sSliceStart)) (ctl cSliceNodes)))
+    [setState sYield (n 1)]
+
+def initBlock : List S :=
+  [setState sBestBound infinity, setState sExhaustive (n 1), setState sSubproblem (v "b"), setState sStop (n 0),
+   setState sPhase (n phaseStart)]
+
+def startSubproblem : List S :=
+  [.ifThen (ge (stateAt sSubproblem) (v "num_subproblems"))
+     [setState sPhase (n phaseDone)]
+     [setState sStrategy (n 0), setState sNextVar (n 0), setState sDepth (n 0), setState sBot (n 0),
+      copyStore "root_lower" "root_upper" "lower" "upper" zeroBase blockBase,
+      setState sRemaining (ctl cPower), setState sLeaf (n 0), setState sPhase (n phaseDive)]]
+
+/-- One iteration of the dive, or the end of it: sections D and E of the source. -/
+def diveIteration : List S :=
+  [.ifThen (land (land (gt (stateAt sRemaining) (n 0)) (eq (stateAt sLeaf) (n 0))) (eq (stateAt sStop) (n 0)))
+     (diveStep ++ [sliceCheck])
+     [.ifThen (land (eq (stateAt sLeaf) (n 1)) (eq (stateAt sStop) (n 0)))
+        [.declInit int "skip_to" (bin "<<" (add (bin ">>" (stateAt sSubproblem) (stateAt sRemaining)) (n 1)) (stateAt sRemaining)),
+         .assign (ctl cNextSubproblem) (mx (ctl cNextSubproblem) (v "skip_to")), setState sPhase (n phaseNext)]
+        [.ifThen (eq (stateAt sStop) (n 0))
+           [when (ne (ctl cEps) (n 0)) [setState sStrategy (mx (n 1) (stateAt sStrategy)), setState sNextVar (n 0)],
+            setState sInner (n 1), setState sPhase (n phaseSearch)]
+           [setState sPhase (n phaseDone)]]]]
+
+/-- One iteration of the search loop of section F. -/
+def searchIteration : List S :=
+  [.ifThen (land (ne (stateAt sInner) (n 0)) (eq (stateAt sStop) (n 0)))
+     (solveStep ++ [sliceCheck])
+     [setState sPhase (n phaseNext)]]
+
+def nextSubproblem : List S :=
+  [.ifThen (eq (stateAt sStop) (n 0))
+     [setState sSubproblem (ctl cNextSubproblem), .assign (ctl cNextSubproblem) (add (ctl cNextSubproblem) (n 1)),
+      setState sPhase (n phaseStart)]
+     [setState sPhase (n phaseDone)]]
+
+/-- The block loop of the source as a state machine over `state[b][phase]`, so a slice can stop after any iteration and the next call resumes. -/
 def solveFn : SlangFunctionDecl :=
   { attrs := [.shaderCompute, .numthreads 1 1 1], name := "solve", params := [⟨"tid", .vec .uint 3, .svDispatchThreadId, none, none, .qIn⟩],
     body := [
       .declInit int "b" (call "int" [.member (v "tid") "x"]),
       when (ge (v "b") (ctl cBlocks)) [.retVoid],
-      setState sBestBound infinity, setState sExhaustive (n 1), setState sSubproblem (v "b"), setState sStop (n 0),
+      when (eq (stateAt sPhase) (n 0)) initBlock,
       .declInit int "num_subproblems" (bin "<<" (n 1) (ctl cPower)),
-      .whileLoop (land (lt (stateAt sSubproblem) (v "num_subproblems")) (eq (stateAt sStop) (n 0)))
-        [setState sStrategy (n 0), setState sNextVar (n 0), setState sDepth (n 0), setState sBot (n 0),
-         copyStore "root_lower" "root_upper" "lower" "upper" zeroBase blockBase,
-         setState sRemaining (ctl cPower), setState sLeaf (n 0),
-         .whileLoop (land (land (gt (stateAt sRemaining) (n 0)) (eq (stateAt sLeaf) (n 0))) (eq (stateAt sStop) (n 0))) diveStep,
-         .ifThen (land (eq (stateAt sLeaf) (n 1)) (eq (stateAt sStop) (n 0)))
-           [.declInit int "skip_to" (bin "<<" (add (bin ">>" (stateAt sSubproblem) (stateAt sRemaining)) (n 1)) (stateAt sRemaining)),
-            .assign (ctl cNextSubproblem) (mx (ctl cNextSubproblem) (v "skip_to"))]
-           [when (eq (stateAt sStop) (n 0))
-             [when (ne (ctl cEps) (n 0)) [setState sStrategy (mx (n 1) (stateAt sStrategy)), setState sNextVar (n 0)],
-              .declInit bool "inner" (.litBool true),
-              .whileLoop (land (v "inner") (eq (stateAt sStop) (n 0))) solveStep]],
-         when (eq (stateAt sStop) (n 0))
-           [setState sSubproblem (ctl cNextSubproblem), .assign (ctl cNextSubproblem) (add (ctl cNextSubproblem) (n 1))]]] }
+      setState sYield (n 0), setState sSliceStart (stateAt sNodes),
+      .whileLoop (land (ne (stateAt sPhase) (n phaseDone)) (eq (stateAt sYield) (n 0)))
+        [when (eq (stateAt sPhase) (n phaseStart)) startSubproblem,
+         when (eq (stateAt sPhase) (n phaseDive)) diveIteration,
+         when (eq (stateAt sPhase) (n phaseSearch)) searchIteration,
+         when (eq (stateAt sPhase) (n phaseNext)) nextSubproblem]] }
 
 def solveModule : SlangShaderModule :=
   { shaderModule with

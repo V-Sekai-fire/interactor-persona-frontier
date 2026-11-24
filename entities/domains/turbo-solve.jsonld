@@ -1,0 +1,225 @@
+{
+ "@context": {
+  "VSEKAI": "https://v-sekai.org/",
+  "domain": "VSEKAI:planning/domain/"
+ },
+ "@type": "domain:Definition",
+ "actions": {
+  "solve-slice": {
+   "body": [
+    {
+     "eval": {
+      "a": {
+       "pointer": "/free/[m]",
+       "type": "pointer/get"
+      },
+      "b": 1,
+      "type": "math/eq"
+     }
+    },
+    {
+     "eval": {
+      "a": {
+       "pointer": "/done/[l]",
+       "type": "pointer/get"
+      },
+      "b": 0,
+      "type": "math/eq"
+     }
+    },
+    {
+     "pointer/set": "/done/[l]",
+     "value": 1
+    },
+    {
+     "pointer/set": "/free/[m]",
+     "value": 0
+    }
+   ],
+   "description": "The action_solve_slice operation: resume the checkpoint, run a bounded number of nodes, write the checkpoint. The effect claims the level is done; the runtime reads the real status and replans.",
+   "duration": "PT5S",
+   "params": [
+    {
+     "enum": "machine",
+     "name": "m"
+    },
+    {
+     "enum": "level",
+     "name": "l"
+    }
+   ],
+   "x-duration": "unmeasured",
+   "x-operation": "action_solve_slice"
+  },
+  "wait-free": {
+   "body": [
+    {
+     "pointer/set": "/free/[m]",
+     "value": 1
+    }
+   ],
+   "description": "The action_wait_free operation: poll the host load until it is under the limit.",
+   "duration": "PT5S",
+   "params": [
+    {
+     "enum": "machine",
+     "name": "m"
+    }
+   ],
+   "x-duration": "unmeasured",
+   "x-operation": "action_wait_free"
+  }
+ },
+ "description": "Time-sliced solving on a machine that is also running a real-time game: one action waits until the host is free, one runs a bounded slice of the reentrant search and writes its checkpoint. Durations are unmeasured.",
+ "enums": {
+  "level": {
+   "party": 2,
+   "saga": 3,
+   "scout": 1
+  },
+  "machine": {
+   "host": 1
+  }
+ },
+ "methods": {
+  "solve-level": {
+   "alternatives": [
+    {
+     "check": [
+      {
+       "eval": {
+        "a": {
+         "pointer": "/done/[l]",
+         "type": "pointer/get"
+        },
+        "b": 1,
+        "type": "math/eq"
+       }
+      }
+     ],
+     "name": "finished",
+     "subtasks": []
+    },
+    {
+     "check": [],
+     "name": "wait-then-slice",
+     "subtasks": [
+      [
+       "wait-free-host",
+       {
+        "param": "m"
+       }
+      ],
+      [
+       "solve-slice-of",
+       {
+        "param": "m"
+       },
+       {
+        "param": "l"
+       }
+      ]
+     ]
+    }
+   ],
+   "params": [
+    {
+     "enum": "machine",
+     "name": "m"
+    },
+    {
+     "enum": "level",
+     "name": "l"
+    }
+   ]
+  },
+  "solve-slice-of": {
+   "alternatives": [
+    {
+     "check": [
+      {
+       "eval": {
+        "a": {
+         "pointer": "/done/[l]",
+         "type": "pointer/get"
+        },
+        "b": 1,
+        "type": "math/eq"
+       }
+      }
+     ],
+     "name": "finished",
+     "subtasks": []
+    },
+    {
+     "check": [],
+     "name": "slice",
+     "subtasks": [
+      [
+       "solve-slice",
+       {
+        "param": "m"
+       },
+       {
+        "param": "l"
+       }
+      ]
+     ]
+    }
+   ],
+   "params": [
+    {
+     "enum": "machine",
+     "name": "m"
+    },
+    {
+     "enum": "level",
+     "name": "l"
+    }
+   ],
+   "x-wraps": "solve-slice"
+  },
+  "wait-free-host": {
+   "alternatives": [
+    {
+     "check": [
+      {
+       "eval": {
+        "a": {
+         "pointer": "/free/[m]",
+         "type": "pointer/get"
+        },
+        "b": 1,
+        "type": "math/eq"
+       }
+      }
+     ],
+     "name": "already",
+     "subtasks": []
+    },
+    {
+     "check": [],
+     "name": "wait",
+     "subtasks": [
+      [
+       "wait-free",
+       {
+        "param": "m"
+       }
+      ]
+     ]
+    }
+   ],
+   "params": [
+    {
+     "enum": "machine",
+     "name": "m"
+    }
+   ],
+   "x-wraps": "wait-free"
+  }
+ },
+ "name": "turbo_solve",
+ "source": "interactor-persona-frontier",
+ "version": "0.1.0"
+}
