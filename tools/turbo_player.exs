@@ -6,7 +6,7 @@
 # The game on this machine is real time: a slice is a bounded number of nodes at the lowest priority, the planner is asked again after every slice
 # (reentrant, like the replan loop of an HTN planner), and the whole search state is in a checkpoint file, so this tool can be stopped and started at any time.
 # --engine gpu runs the cooperative CUDA kernel instead (tools/turbo_gpu.exs builds it): the resident host takes "run N" launches per slice (--slice, default 10), each launch
-# --gpu-slice nodes per block (default 1, about a millisecond), under a duty cap (--duty, default 25 percent); its state is saved to the checkpoint every --save-every slices.
+# a launch of about a millisecond (the kernel stops it by its own clock), under a duty cap (--duty, default 25 percent); its state is saved to the checkpoint every --save-every slices.
 # For that engine the gate is the GPU only, minus this process's own recent share.
 # Usage: elixir tools/turbo_player.exs <level.cp> [--slice NODES] [--max-load L] [--max-gpu PERCENT] [--poll-ms MS] [--max-slices N] [--checkpoint FILE]
 #   the level is the file's base name: scout, party or saga (the enumeration `level` of the domain).
@@ -18,6 +18,8 @@
 engine = Keyword.get(opts, :engine, "cpu")
 gpu? = engine == "gpu"
 # a slice must be long against the planner call (about 120 ms): 500 launches
+# a launch is a time budget of the real-time contract (a sixteenth of a 64 Hz frame, about a millisecond), not a node count: the kernel stops it by its own clock
+launch_us = 1000
 slice = Keyword.get(opts, :slice, if(gpu?, do: 500, else: 100))
 max_load = Keyword.get(opts, :max_load, 4.0)
 max_gpu = Keyword.get(opts, :max_gpu, 30)
@@ -170,7 +172,7 @@ gpu_port = fn ->
       {cubin, host, input} = gpu_files
       env = [{~c"TURBO_SERVE", ~c"1"}, {~c"TURBO_GPU_DUTY", ~c"#{Keyword.get(opts, :duty, 25.0)}"}]
       port = Port.open({:spawn_executable, host}, [:binary, :exit_status, :stderr_to_stdout, {:line, 4096}, {:env, env},
-        {:args, [cubin, input, Integer.to_string(Keyword.get(opts, :blocks, 64)), Integer.to_string(Keyword.get(opts, :gpu_slice, 1))]}])
+        {:args, [cubin, input, Integer.to_string(Keyword.get(opts, :blocks, 64)), Integer.to_string(launch_us)]}])
       if File.exists?(checkpoint) and not done?.(), do: IO.puts("  " <> Enum.join(gpu_reply.(port, "load " <> checkpoint), " / "))
       Agent.update(gpu_state, &%{&1 | port: port})
       port

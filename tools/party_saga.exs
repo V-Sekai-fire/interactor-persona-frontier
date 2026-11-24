@@ -106,7 +106,7 @@ defmodule Saga do
   end
 
   defp slang_search(cp, fzn, work, limit_s) do
-    args = ["#{limit_s}", "elixir", "tools/turbo_player.exs", cp, "--engine", "gpu", "--blocks", "1", "--power", "0", "--slice", "500", "--duty", "50", "--fzn", fzn, "--checkpoint", Path.join(work, "ck.bin")]
+    args = ["#{limit_s}", "elixir", "tools/turbo_player.exs", cp, "--engine", "gpu", "--slice", "500", "--duty", "50", "--fzn", fzn, "--checkpoint", Path.join(work, "ck.bin")]
     {_, code} = System.cmd("timeout", args, env: [{"TMPDIR", work}, {"ELIXIR_ERL_OPTIONS", "+fnu"}], stderr_to_stdout: true)
     if code == 0, do: :finished, else: :stopped
   end
@@ -508,7 +508,25 @@ defmodule Saga.Cli do
     IO.puts(Enum.join(Saga.Frontier.table(Saga.Frontier.traces()), "\n"))
     if not ok?, do: IO.puts("gate failed: frontier.json not updated")
   end
-  def main(_), do: IO.puts("usage: party_saga.exs check | solve FILE [SOLVER] | learn | practice | frontier [--steps N] [--limit S] [--max-held H]")
+  # The edge of a solver, read only: each track climbs its ladder from the smallest level (seed 1, no cleared tasks) until the solver does not prove the
+  # optimum inside the limit. Nothing is written to the repository (no traces, no learn), so it can be run for any solver at any time.
+  def main(["edge", solver | rest]) do
+    limit = opt(rest, "--limit", 15)
+    ladder = Saga.steps()
+    rows =
+      for track <- Saga.tracks() do
+        {solved, stopped} =
+          Enum.reduce_while(1..length(ladder), {0, "top of the ladder"}, fn g, {top, _} ->
+            r = Saga.solve_world(Saga.Gen.level(track, g, 0, 1), solver, limit)
+            IO.puts("#{String.pad_trailing(track, 11)} g=#{String.pad_leading(Integer.to_string(g), 2)} tasks #{String.pad_leading(inspect(Enum.at(ladder, g - 1)), 2)}  #{r.status}  #{Float.round(r.seconds * 1.0, 1)} s  objective #{inspect(r.objective)}")
+            if r.status == :optimal, do: {:cont, {g, "top of the ladder"}}, else: {:halt, {top, "g=#{g}: #{r.status}"}}
+          end)
+        {track, solved, stopped}
+      end
+    IO.puts("edge of #{solver}, limit #{limit} s per level (seed 1, wall time including the compile)")
+    for {track, g, stopped} <- rows, do: IO.puts("#{String.pad_trailing(track, 11)} solved up to g=#{g} (#{if g == 0, do: 0, else: Enum.at(ladder, g - 1)} tasks), stopped at #{stopped}")
+  end
+  def main(_), do: IO.puts("usage: party_saga.exs check | solve FILE [SOLVER] | learn | practice | frontier [--steps N] [--limit S] [--max-held H] | edge SOLVER [--limit S]")
 
   def packet_checks do
     find = fn prefix -> Enum.find(Saga.Tests.all(), fn {n, _, _} -> String.starts_with?(n, prefix) end) |> elem(1) end

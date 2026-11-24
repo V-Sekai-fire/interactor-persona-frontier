@@ -90,7 +90,7 @@ int main(int argc, char** argv) {
     fclose(in);
     size_t cells = (size_t)blocks * n;
     std::vector<int> lower(cells), upper(cells), snap_lower(cells), snap_upper(cells), best_lower(cells), best_upper(cells);
-    std::vector<int> decisions((size_t)blocks * max_depth * 8), state((size_t)blocks * STATE, 0), control(16, 0);
+    std::vector<int> decisions((size_t)blocks * max_depth * 8), state((size_t)blocks * STATE, 0), control(17, 0);
     control[0] = m; control[1] = n; control[2] = ns; control[3] = objective; control[4] = power; control[5] = max_depth;
     control[6] = blocks; control[7] = h[7]; control[8] = h[8]; control[9] = 0; control[10] = blocks; control[11] = INT_MAX; control[12] = 0;
     FILE* cp = fopen(argv[2], "rb");

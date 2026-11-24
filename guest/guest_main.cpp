@@ -42,7 +42,7 @@ int main() {
     for (auto& x : strategies) x = next();
     for (auto& x : strategy_vars) x = next();
     std::vector<int> lower(n), upper(n), snap_lower(n), snap_upper(n), best_lower(n), best_upper(n);
-    std::vector<int> decisions((size_t)max_depth * 8), state(STATE, 0), control(16, 0);
+    std::vector<int> decisions((size_t)max_depth * 8), state(STATE, 0), control(17, 0);
     control[0] = m; control[1] = n; control[2] = ns; control[3] = objective; control[4] = power; control[5] = max_depth;
     control[6] = 1; control[7] = h[7]; control[8] = h[8]; control[11] = INT_MAX; control[14] = 1;
     Globals g{{lower.data(), (size_t)n}, {upper.data(), (size_t)n}, {root_lower.data(), (size_t)n}, {root_upper.data(), (size_t)n},

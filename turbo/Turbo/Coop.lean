@@ -23,6 +23,9 @@ def sync : S := .expr (call "AllMemoryBarrierWithGroupSync" [])
 def leader (body : List S) : S := when (eq tidE (n 0)) body
 /-- The device clock, truncated to 32 bits (a difference of two readings is right while it stays under 2^32 ticks). -/
 def clockNow : E := call "int" [call "getRealtimeClockLow" []]
+/-- Stop this launch after the time budget (`control[16]` ticks of the device clock, 0 for none) has run: a launch is about a millisecond whatever the size of the level. -/
+def timeCheck : S :=
+  when (land (gt (ctl cSliceTicks) (n 0)) (ge (sub clockNow (stateAt 27)) (ctl cSliceTicks))) [setState sYield (n 1)]
 /-- Profile slots of the per-block state: 24 start of the timed region, 25 ticks (in sixteenths) spent in propagation during this launch, 26 ticks of the whole launch, 27 start of the launch. -/
 def profStart : S := leader [setState 24 clockNow]
 def profEnd : S := leader [setState 25 (add (stateAt 25) (bin ">>" (bin "-" clockNow (stateAt 24)) (n 4)))]
@@ -268,7 +271,7 @@ def searchIterationCoop : List S :=
              sync],
           when (eq (stateAt sLeaf) (n 1))
             [.ifThen (eq decDepth (n 0)) [leader [setState sInner (n 0)], sync] [.expr (call "backtrack_coop" [v "b", tidE])]]],
-       leader [sliceCheck],
+       leader [sliceCheck, timeCheck],
        sync])
      [leader [setState sPhase (n phaseNext)], sync]]
 
@@ -283,7 +286,7 @@ def diveIterationCoop (atomic : Bool) : List S :=
             .expr (call "embed_a" [v "b", decVar (n 0), call "child" [v "b", n 0, v "branch"]])]
            [setState sLeaf (n 1), setState sExhaustive (n 0)]],
          sync],
-      leader [sliceCheck],
+      leader [sliceCheck, timeCheck],
       sync]
      [leader [.ifThen (land (eq (stateAt sLeaf) (n 1)) (eq (stateAt sStop) (n 0)))
         [.declInit int "skip_to" (bin "<<" (add (bin ">>" (stateAt sSubproblem) (stateAt sRemaining)) (n 1)) (stateAt sRemaining)),

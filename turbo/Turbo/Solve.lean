@@ -30,6 +30,8 @@ def cError := 12
 def cSliceNodes := 13
 def cExternal := 14
 def cCancel := 15
+/-- The launch budget in device clock ticks (0 for none); the cooperative kernel stops a launch at the next node after it has run this long. -/
+def cSliceTicks := 16
 -- per-block state
 def sDepth := 0
 def sStrategy := 1
