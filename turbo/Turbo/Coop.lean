@@ -9,7 +9,6 @@ open LeanSlang
 
 def sNewBest := 20
 def sFound := 21
-def sActive := 22
 def lanes : E := n 256
 def tidE : E := v "tid"
 def sync : S := .expr (call "AllMemoryBarrierWithGroupSync" [])
@@ -20,23 +19,15 @@ def strided (i : String) (start bound : E) (body : List S) : S :=
   .ifThen (.litBool true)
     [.declInit int i (add start tidE), .whileLoop (lt (v i) bound) (body ++ [.assign (v i) (add (v i) lanes)])] []
 
-/-- The per-block list of propagators that are not yet entailed (Turbo's `FixpointSubset`): `active[2 * b * m ..]`, with a scratch copy beside it. -/
-def activeBase : E := mul (mul (n 2) (v "b")) (ctl cBytecodes)
-def scratchBase : E := add activeBase (ctl cBytecodes)
-def activeAt (k : E) : E := .index (v "active") (add activeBase k)
-def scratchAt (k : E) : E := .index (v "active") (add scratchBase k)
-/-- Every propagator active again, as after the store is restored from a snapshot. -/
-def resetActive : List S :=
-  [strided "k" (n 0) (ctl cBytecodes) [.assign (activeAt (v "k")) (v "k")],
-   leader [setState sActive (ctl cBytecodes)],
-   sync]
-
 def embedA : SlangFunctionDecl :=
   { retType := bool, name := "embed_a", params := [param "b" int, param "x" int, param "r" itv],
     body := [
-      .decl int "old_lower", .decl int "old_upper",
-      .expr (call "InterlockedMax" [cell "lower" (v "x"), lower (v "r"), v "old_lower"]),
-      .expr (call "InterlockedMin" [cell "upper" (v "x"), upper (v "r"), v "old_upper"]),
+      .declInit int "current_lower" (cell "lower" (v "x")), .declInit int "current_upper" (cell "upper" (v "x")),
+      .declInit bool "tighter_lower" (gt (lower (v "r")) (v "current_lower")), .declInit bool "tighter_upper" (lt (upper (v "r")) (v "current_upper")),
+      when (land (.un "!" (v "tighter_lower")) (.un "!" (v "tighter_upper"))) [ret (.litBool false)],
+      .declInit int "old_lower" (v "current_lower"), .declInit int "old_upper" (v "current_upper"),
+      when (v "tighter_lower") [.expr (call "InterlockedMax" [cell "lower" (v "x"), lower (v "r"), v "old_lower"])],
+      when (v "tighter_upper") [.expr (call "InterlockedMin" [cell "upper" (v "x"), upper (v "r"), v "old_upper"])],
       .declInit int "new_lower" (mx (v "old_lower") (lower (v "r"))), .declInit int "new_upper" (mn (v "old_upper") (upper (v "r"))),
       .declInit bool "changed" (lor (ne (v "new_lower") (v "old_lower")) (ne (v "new_upper") (v "old_upper"))),
       when (land (v "changed") (call "itv_is_bot" [mk (v "new_lower") (v "new_upper")])) [setState sBot (n 1)],
@@ -68,34 +59,18 @@ def propagateCoop : SlangFunctionDecl :=
       .whileLoop (ne (v "again") (n 0))
         [leader [.assign (shared "s_changed") (n 0)],
          sync,
-         strided "k" (n 0) (stateAt sActive) [when (call "deduce_bytecode_a" [v "b", uintOf (activeAt (v "k"))]) [.assign (shared "s_changed") (n 1)]],
+         strided "i" (n 0) (ctl cBytecodes) [when (call "deduce_bytecode_a" [v "b", uintOf (v "i")]) [.assign (shared "s_changed") (n 1)]],
          sync,
          .assign (v "again") (pick (land (ne (shared "s_changed") (n 0)) (eq (stateAt sBot) (n 0))) (n 1) (n 0)),
          sync],
       leader [.assign (shared "s_flag") (n 0)],
       sync,
       when (eq (stateAt sBot) (n 0))
-        [.declInit int "base" (n 0),
-         .whileLoop (lt (v "base") (stateAt sActive))
-           [.declInit int "k" (add (v "base") tidE),
-            .declInit bool "keep" (.litBool false),
-            .declInit int "i" (n 0),
-            when (lt (v "k") (stateAt sActive))
-              [.assign (v "i") (activeAt (v "k")), .assign (v "keep") (.un "!" (call "ask_bytecode_b" [v "b", uintOf (v "i")]))],
-            .declInit int "rank" (call "int" [call "WavePrefixCountBits" [v "keep"]]),
-            .declInit int "total" (call "int" [call "WaveActiveCountBits" [v "keep"]]),
-            .declInit int "start" (n 0),
-            when (call "WaveIsFirstLane" []) [.expr (call "InterlockedAdd" [shared "s_flag", v "total", v "start"])],
-            .assign (v "start") (call "WaveReadLaneFirst" [v "start"]),
-            when (v "keep") [.assign (scratchAt (add (v "start") (v "rank"))) (v "i")],
-            .assign (v "base") (add (v "base") lanes)],
-         sync,
-         strided "k" (n 0) (shared "s_flag") [.assign (activeAt (v "k")) (scratchAt (v "k"))]],
+        [strided "i" (n 0) (ctl cBytecodes) [when (land (eq (shared "s_flag") (n 0)) (.un "!" (call "ask_bytecode_b" [v "b", uintOf (v "i")]))) [.assign (shared "s_flag") (n 1)]]],
       sync,
       leader [
         .ifThen (eq (stateAt sBot) (n 0))
-          [setState sActive (shared "s_flag"),
-           when (eq (shared "s_flag") (n 0))
+          [when (eq (shared "s_flag") (n 0))
             [setState sLeaf (n 1),
              .ifThen (ge (ctl cObjective) (n 0))
                [.declInit int "bound" (cell "lower" (ctl cObjective)),
@@ -178,10 +153,10 @@ def backtrackCoop : SlangFunctionDecl :=
         when (eq decDepth (neg (n 1))) [setState sInner (n 0)]],
       sync,
       when (ne decDepth (neg (n 1)))
-        ([copyCoop "snap_lower" "snap_upper" "lower" "upper" blockBase blockBase,
+        [copyCoop "snap_lower" "snap_upper" "lower" "upper" blockBase blockBase,
          sync,
          leader [setState sBot (n 0)],
-         sync] ++ resetActive ++ [
+         sync,
          .declInit int "again" (n 1),
          .whileLoop (ne (v "again") (n 0))
            [leader [.assign (shared "s_changed") (n 0)],
@@ -193,7 +168,7 @@ def backtrackCoop : SlangFunctionDecl :=
             sync],
          leader [.expr (call "embed_a" [v "b", decVar (sub decDepth (n 1)), call "next_child" [v "b", sub decDepth (n 1)]]),
                  setState sStrategy (stateAt sSnapStrategy), setState sNextVar (stateAt sSnapNextVar)],
-         sync])] }
+         sync]] }
 
 /-- One iteration of the search loop of section F. -/
 def searchIterationCoop : List S :=
@@ -243,11 +218,11 @@ def diveIterationCoop (atomic : Bool) : List S :=
 def startSubproblemCoop : List S :=
   [.ifThen (ge (stateAt sSubproblem) (v "num_subproblems"))
      [leader [setState sPhase (n phaseDone)], sync]
-     ([copyCoop "root_lower" "root_upper" "lower" "upper" zeroBase blockBase,
-       sync,
-       leader [setState sStrategy (n 0), setState sNextVar (n 0), setState sDepth (n 0), setState sBot (n 0),
-               setState sRemaining (ctl cPower), setState sLeaf (n 0), setState sPhase (n phaseDive)],
-       sync] ++ resetActive)]
+     [copyCoop "root_lower" "root_upper" "lower" "upper" zeroBase blockBase,
+      sync,
+      leader [setState sStrategy (n 0), setState sNextVar (n 0), setState sDepth (n 0), setState sBot (n 0),
+              setState sRemaining (ctl cPower), setState sLeaf (n 0), setState sPhase (n phaseDive)],
+      sync]]
 
 def nextSubproblemCoop : List S :=
   [leader (nextSubproblem true), sync]
@@ -276,7 +251,7 @@ def coopShared : List SlangGroupSharedDecl :=
 
 def solveCoopModule : SlangShaderModule :=
   { shaderModule with
-    globals := globalBuffers ++ [global "active" (.rwBuf int) 14],
+    globals := globalBuffers,
     groupShared := coopShared,
     functions := shaderModule.functions ++
       [embedB, loadB, askBytecodeB, pushDecision, childFn, currentChildFn, nextChildFn,

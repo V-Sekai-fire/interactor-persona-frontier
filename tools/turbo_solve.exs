@@ -1,9 +1,10 @@
 # Solve a problem dumped from Turbo's preprocessing (slang/turbo/oracle/cp_dump.cpp) with the Lean-emitted barebones search (turbo/Turbo/Solve.lean) on the CPU.
 # The search is reentrant: it runs `--slice N` nodes, writes its whole state to the checkpoint file and returns; the next call resumes from the file, so it can be
 # timesliced, paused for hours and restarted. Without `--once` this tool calls it again until the search is done (`--pause-ms` between slices).
+# `--sort-ops` orders the bytecodes by operator (stable): neighbouring GPU threads then run the same operator. The fixpoint, and so every node, is unchanged.
 # `--prepare` only builds the solver and its input (under the temp directory, one folder per problem) and prints that folder: the binary there takes `input.txt CHECKPOINT SLICE`.
 # Usage: elixir tools/turbo_solve.exs <problem.cp> [--blocks N] [--power P] [--stop-nodes N] [--max-depth D] [--slice N] [--checkpoint FILE] [--once] [--pause-ms M]
-{opts, [dump_path], _} = OptionParser.parse(System.argv(), strict: [blocks: :integer, power: :integer, stop_nodes: :integer, max_depth: :integer, eps: :boolean, prepare: :boolean, slice: :integer, checkpoint: :string, once: :boolean, pause_ms: :integer])
+{opts, [dump_path], _} = OptionParser.parse(System.argv(), strict: [blocks: :integer, power: :integer, stop_nodes: :integer, max_depth: :integer, eps: :boolean, prepare: :boolean, sort_ops: :boolean, slice: :integer, checkpoint: :string, once: :boolean, pause_ms: :integer])
 blocks = Keyword.get(opts, :blocks, 1)
 power = Keyword.get(opts, :power, 0)
 stop_nodes = Keyword.get(opts, :stop_nodes, 2_147_483_647)
@@ -38,7 +39,9 @@ objective = if untyped == "1", do: -1, else: String.to_integer(objective_var)
 
 n = length(store)
 m = length(bytecodes)
-code = Enum.flat_map(bytecodes, fn row -> [op, x, y, z] = String.split(row); [Map.fetch!(codes, op), String.to_integer(x), String.to_integer(y), String.to_integer(z)] end)
+code_rows_list = Enum.map(bytecodes, fn row -> [op, x, y, z] = String.split(row); [Map.fetch!(codes, op), String.to_integer(x), String.to_integer(y), String.to_integer(z)] end)
+code_rows_list = if Keyword.get(opts, :sort_ops, false), do: Enum.sort_by(code_rows_list, &hd/1), else: code_rows_list
+code = List.flatten(code_rows_list)
 {strategies, strategy_vars, _} =
   Enum.reduce(strategy_rows, {[], [], 0}, fn row, {acc, vars, offset} ->
     [order, value, count | members] = ints.(row)

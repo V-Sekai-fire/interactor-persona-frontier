@@ -1,5 +1,6 @@
 // Runs the cooperative Slang solver (turbo/Turbo/Coop.lean, compiled to a cubin) on the GPU in short bounded launches.
 // Usage: turbo_gpu KERNEL.cubin INPUT.txt BLOCKS SLICE_NODES [PAUSE_MS]
+// TURBO_GPU_DUTY (percent, default 100) caps this process's share of the GPU: after a launch that took d ms the host sleeps d * (100 / duty - 1) ms, so a game rendering at 64 Hz gets the card in between.
 // INPUT.txt is the problem text of tools/turbo_solve.exs (header of ten integers, the store, the bytecodes, the strategies). Each launch advances every block by at most
 // SLICE_NODES nodes, so one launch is short; the host sleeps PAUSE_MS between launches. Output is the format of the CPU driver, plus launch statistics.
 #include <cuda.h>
@@ -52,7 +53,8 @@ int main(int argc, char** argv) {
     CUfunction fn; CHECK(cuModuleGetFunction(&fn, mod, "solve"));
     CUdeviceptr gp; size_t gsize;
     CHECK(cuModuleGetGlobal(&gp, &gsize, mod, "SLANG_globalParams"));
-    if (gsize != sizeof(Globals)) { fprintf(stderr, "global parameter block is %zu bytes, expected %zu\n", gsize, sizeof(Globals)); return 2; }
+    // 224 bytes: fourteen buffers; 240 bytes: a fifteenth, the per-block list of active propagators.
+    if (gsize != sizeof(Globals) && gsize != sizeof(Globals) - sizeof(Span)) { fprintf(stderr, "global parameter block is %zu bytes, expected %zu or %zu\n", gsize, sizeof(Globals), sizeof(Globals) - sizeof(Span)); return 2; }
     CUdeviceptr d_lower = upload(zeros_cells), d_upper = upload(zeros_cells), d_rl = upload(root_lower), d_ru = upload(root_upper);
     CUdeviceptr d_sl = upload(zeros_cells), d_su = upload(zeros_cells), d_bl = upload(zeros_cells), d_bu = upload(zeros_cells);
     CUdeviceptr d_active = upload(zeros_active);
@@ -61,12 +63,13 @@ int main(int argc, char** argv) {
     Globals g{{(void*)d_lower, cells}, {(void*)d_upper, cells}, {(void*)d_rl, (size_t)n}, {(void*)d_ru, (size_t)n}, {(void*)d_sl, cells}, {(void*)d_su, cells},
               {(void*)d_bl, cells}, {(void*)d_bu, cells}, {(void*)d_code, (size_t)m}, {(void*)d_str, (size_t)ns}, {(void*)d_sv, strategy_vars.size()},
               {(void*)d_dec, decisions.size()}, {(void*)d_state, state.size()}, {(void*)d_ctl, control.size()}, {(void*)d_active, zeros_active.size()}};
-    CHECK(cuMemcpyHtoD(gp, &g, sizeof g));
+    CHECK(cuMemcpyHtoD(gp, &g, gsize));
 
     using clk = std::chrono::steady_clock;
     auto start = clk::now();
     int launches = 0;
     double max_ms = 0, sum_ms = 0;
+    const double duty = getenv("TURBO_GPU_DUTY") ? atof(getenv("TURBO_GPU_DUTY")) : 100.0;
     bool done = false;
     int last_approx = INT_MAX;
     const int max_launches = getenv("TURBO_MAX_LAUNCHES") ? atoi(getenv("TURBO_MAX_LAUNCHES")) : INT_MAX;
@@ -95,6 +98,7 @@ int main(int argc, char** argv) {
             fprintf(stderr, "launch %d: %ld nodes, %d of %d blocks done, next subproblem %d, best bound %d\n", launches, total_nodes, finished, blocks, control[10], control[11]);
         }
         if (!done && pause_ms) std::this_thread::sleep_for(std::chrono::milliseconds(pause_ms));
+        if (!done && duty < 100.0) std::this_thread::sleep_for(std::chrono::duration<double, std::milli>(ms * (100.0 / duty - 1.0)));
     }
     double wall = std::chrono::duration<double, std::milli>(clk::now() - start).count();
     CHECK(cuMemcpyDtoH(control.data(), d_ctl, control.size() * sizeof(int)));
