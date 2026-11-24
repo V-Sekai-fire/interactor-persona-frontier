@@ -3,11 +3,13 @@
 # Party Saga: our own RECTGTN problem in MiniZinc
 
 A guild party of characters, each with a body, a controller, a role and a loadout, clears a board of tasks on a
-world map. It is **our problem, not a MiniZinc Challenge problem**: no claim about the Challenge is made, and no
+world map. 
+
+<!-- Party Saga is **our problem, not a MiniZinc Challenge problem**: no claim about the Challenge is made, and no
 "best known" value exists. The reference is the proved optimum of a solver, labelled as such.
 
 Files: `entities/fixtures/minizinc/party-saga/party-saga.mzn` (the model), `instances/tests/` (hand-checkable
-cases), `tools/party_saga.exs` (generator, solver runner, tests, frontier loop), `frontier.json` and `traces.jsonl`.
+cases), `tools/party_saga.exs` (generator, solver runner, tests, frontier loop), `frontier.json` and `traces.jsonl`. -->
 
 ## How each RECTGTN part appears
 
