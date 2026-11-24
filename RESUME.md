@@ -32,3 +32,4 @@ its C++ target rejects buffer atomics. `tools/party_saga.exs dump TRACK G SEED O
   `/mnt/fire/persona-stream/kimodo/ternary/out`, the Party Saga files, or both). Check what chibifire already holds before pushing.
 - Backlog B1 to B9 is in the plan; B9 (pushing and merging) is the owner's own action.
 - Unread sources: the original lazy clause generation papers, Shaw 1998, the Chu thesis, the Springer retrospective.
+- 2026-11-24: slang/turbo/pir.slang copies pir.hpp; entry-point compile fails on recursion in den_fdiv/den_cdiv (E55201). Next: unroll to depth two, then run probe.slang on cpp against Turbo values.

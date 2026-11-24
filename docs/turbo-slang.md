@@ -41,3 +41,12 @@ No division, modulo or absolute value reaches the flattened model.
 - P0 measure what Party Saga needs: constraint kinds measured (above); baseline times not yet.
 - P1 toolchain gate: compile passed for CUDA and SPIR-V and for the CPU target without atomics; nothing executed.
 - P2 format and kernel, P3 search and objective, P4 targets and numbers: not started.
+## P2 copy of pir.hpp (2026-11-24): `slang/turbo/pir.slang`, `slang/turbo/probe.slang`
+Copied: `ask`, `itv_div`, `num_fdiv/cdiv/tdiv/ediv`, `den_fdiv/cdiv/tdiv/ediv`, `mul_inv`, `deduce`, the battery `tdiv/fdiv/cdiv/ediv/emod`, `fjoin`, and an `Itv` with `meet`/`join`.
+Compiles to `-target cpp` and `-target cuda` as a library; **does not compile with an entry point** (`probe.slang`) because of recursion:
+- spirv and cuda: `error[E55201]: recursion not allowed` in `den_fdiv`, `den_cdiv` (they call themselves on split intervals).
+- cpp: `error[E99997] ... unexpected: circularity during codegen`.
+Recursion depth in the source is at most two levels (a split of `x`, then a split of `y`), so the next step is to unroll those calls into
+fixed-depth copies, keeping each rule's text. That is the first departure from a literal copy and is forced by the compiler.
+Departures so far: `deduce` writes into the three intervals with `meet` instead of calling `sub->embed` (the caller stores them); `ask` for
+`MUL` spells `r2 == 0` as both bounds equal 0; values are `int`. Nothing here has been run, and none of it is tested against Turbo.
