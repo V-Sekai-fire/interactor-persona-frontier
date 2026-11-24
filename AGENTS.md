@@ -10,3 +10,4 @@ The standing rules of the Chibifire Hair Cards project are in the viewer reposit
 - No modes or switches: a feature is off because its data is empty, so one model serves every track (Party Saga, the store).
 - A job that runs over a minute is a named systemd oneshot unit kept in `deploy/`, never `nohup` or a background shell; it declares its CPU and memory limits and checks the host's load first.
 - More checks: `lake build frontier_store frontier_packets`, `elixir tools/party_saga.exs check`, and `frontier_store fixtures entities` on a new database (`FRONTIER_DB` pointing at a file that does not exist).
+- Licensing follows the REUSE specification: `REUSE.toml` annotates files (no SPDX headers in code), texts are in `LICENSES/`; run `reuse lint` after adding third-party or Turbo-derived files.

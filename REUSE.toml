@@ -1,0 +1,28 @@
+version = 1
+
+[[annotations]]
+path = "**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 K. S. Ernest (iFire) Lee"
+SPDX-License-Identifier = "Apache-2.0 OR MIT"
+
+# The Slang port of Turbo (github.com/ptal/turbo, Apache-2.0) and of the interval rules of lala-core (MIT).
+[[annotations]]
+path = ["turbo/**", "slang/turbo/**", "guest/**", "tools/turbo_*", "tools/turbo_console/**", "docs/turbo-slang.md"]
+precedence = "override"
+SPDX-FileCopyrightText = ["2026 K. S. Ernest (iFire) Lee", "2025 Pierre Talbot", "2021 Pierre Talbot, Frédéric Pinel"]
+SPDX-License-Identifier = "Apache-2.0 AND MIT"
+
+# The SQLite amalgamation, public domain.
+[[annotations]]
+path = ["datasources/sqlite/amalgamation/**"]
+precedence = "override"
+SPDX-FileCopyrightText = "the SQLite authors"
+SPDX-License-Identifier = "blessing"
+
+# The TLA+ specification of parallel commits.
+[[annotations]]
+path = ["datasources/datasource-store/thirdparty/tla/**"]
+precedence = "override"
+SPDX-FileCopyrightText = "Cockroach Labs, Inc."
+SPDX-License-Identifier = "BUSL-1.1"
