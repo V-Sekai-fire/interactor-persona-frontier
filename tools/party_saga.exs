@@ -68,7 +68,29 @@ defmodule Saga do
   def limit_args(_, limit_s), do: ["-t", Integer.to_string(limit_s * 1000)]
   def solver_env("turbo" <> _), do: [{"MZN_SOLVER_PATH", Path.join(System.get_env("TURBO_HOME", "/mnt/fire/6-datasource/turbo-build"), "msc")}]
   def solver_env(_), do: []
-  def agree_solvers, do: ~w(chuffed gecode) ++ if(System.get_env("TURBO_HOME"), do: ["turbo.gpu.release"], else: [])
+  def agree_solvers, do: ~w(chuffed gecode) ++ if(System.get_env("TURBO_HOME"), do: ["turbo.gpu.release"], else: []) ++ if(System.get_env("TURBO_SLANG"), do: ["turbo-slang"], else: [])
+  # The Slang port of Turbo: compile to FlatZinc with Turbo's library, dump Turbo's preprocessing, search through the planner player on the GPU, print with Turbo's printer, map back with the .ozn.
+  def run("turbo-slang", model, dzn, limit_s) do
+    runs = "/mnt/fire/6-datasource/turbo-runs"
+    work = Path.join(System.tmp_dir!(), "slang-#{System.unique_integer([:positive])}")
+    File.mkdir_p!(work)
+    [fzn, ozn, cp] = for ext <- ~w(fzn ozn cp), do: Path.join(work, "party." <> ext)
+    env = [{"LD_LIBRARY_PATH", Path.join(@home, "lib")}] ++ solver_env("turbo")
+    {us, status_out} = :timer.tc(fn ->
+      {_, 0} = System.cmd(Path.join(@home, "bin/minizinc"), ["--solver", "turbo.gpu.release", "-c", "--fzn", fzn, "--ozn", ozn, model, dzn], env: env, stderr_to_stdout: true)
+      {dump, 0} = System.cmd(Path.join(runs, "cp_dump"), ["-arch", "barebones", "-or", "1", "-sub", "0", fzn], stderr_to_stdout: false)
+      File.write!(cp, dump)
+      slang_search(cp, fzn, work, limit_s)
+    end)
+    out = slang_output(status_out, ozn, work, env)
+    obj = case Regex.scan(~r/objective = (-?\d+);/, out) do [] -> nil; ms -> ms |> List.last() |> List.last() |> String.to_integer() end
+    status = cond do
+      String.contains?(out, "==========") -> :optimal
+      String.contains?(out, "----------") -> :incumbent
+      true -> :none
+    end
+    %{status: status, objective: obj, seconds: Float.round(us / 1.0e6, 2), out: out}
+  end
   def run(solver, model, dzn, limit_s) do
     args = ["--solver", solver] ++ limit_args(solver, limit_s) ++ [model, dzn]
     env = [{"LD_LIBRARY_PATH", Path.join(@home, "lib")}] ++ solver_env(solver)
@@ -83,6 +105,17 @@ defmodule Saga do
     %{status: status, objective: obj, seconds: Float.round(us / 1.0e6, 2), out: out}
   end
 
+  defp slang_search(cp, fzn, work, limit_s) do
+    args = ["#{limit_s}", "elixir", "tools/turbo_player.exs", cp, "--engine", "gpu", "--blocks", "1", "--power", "0", "--slice", "500", "--duty", "50", "--fzn", fzn, "--checkpoint", Path.join(work, "ck.bin")]
+    {_, code} = System.cmd("timeout", args, env: [{"TMPDIR", work}, {"ELIXIR_ERL_OPTIONS", "+fnu"}], stderr_to_stdout: true)
+    if code == 0, do: :finished, else: :stopped
+  end
+  defp slang_output(:stopped, _, _, _), do: ""
+  defp slang_output(:finished, _ozn, work, _env) do
+    scratch = Path.join([work, "turbo_solve", "party"])
+    [_, bound] = Regex.run(~r/approx (-?\d+)/, File.read!(Path.join(scratch, "result.txt")))
+    File.read!(Path.join(scratch, "solution.mzn")) <> "objective = #{bound};\n==========\n"
+  end
   def tmp(text) do
     p = Path.join(System.tmp_dir!(), "saga-#{System.unique_integer([:positive])}.dzn")
     File.write!(p, text)
