@@ -459,17 +459,23 @@ work = fn coordinator, guest, host, budget, kind ->
     hold_first: Keyword.get(opts, :hold_first_job, false), die_first: Keyword.get(opts, :die_at_first_job, false)}))
 end
 
+# A node is started in one place: the port mapper first (the one beside this VM), because a VM that becomes a node while running does not launch it, and on a host
+# where a connect to a closed loopback port hangs instead of being refused the node start would wait for ever.
+start_node = fn name ->
+  System.cmd(Path.join([:code.root_dir(), "erts-#{:erlang.system_info(:version)}", "bin", "epmd"]), ["-daemon"])
+  {:ok, _} = Node.start(name, :longnames)
+  Node.set_cookie(String.to_atom(cookie))
+end
+
 case role do
   "coordinator" ->
     [cp_path] = args
-    Node.start(String.to_atom(System.get_env("NODE_NAME", "coord@127.0.0.1")), :longnames)
-    Node.set_cookie(String.to_atom(cookie))
+    start_node.(String.to_atom(System.get_env("NODE_NAME", "coord@127.0.0.1")))
     coordinate.(cp_path, Keyword.get(opts, :power, 0), Keyword.get(opts, :workers, 1))
   "worker" ->
     [coordinator, guest, host] = args
     name = System.get_env("NODE_NAME", "w#{System.unique_integer([:positive])}@127.0.0.1")
-    Node.start(String.to_atom(name), :longnames)
-    Node.set_cookie(String.to_atom(cookie))
+    start_node.(String.to_atom(name))
     work.(String.to_atom(coordinator), guest, host, Keyword.get(opts, :budget, 50_000_000), Keyword.get(opts, :kind, "cpu"))
   "local" ->
     [cp_path] = args
@@ -478,8 +484,7 @@ case role do
     guest = Keyword.get(opts, :guest, Path.join(runs, "guest/turbo_guest.elf"))
     host = Keyword.get(opts, :host, Path.join(runs, "host-build/turbo_host"))
     frame = case Keyword.get(opts, :frame_ms) do nil -> []; ms -> ["--frame-ms", to_string(ms)] end
-    Node.start(:"coord@127.0.0.1", :longnames)
-    Node.set_cookie(String.to_atom(cookie))
+    start_node.(:"coord@127.0.0.1")
     ports =
       for {kind, number} <- Enum.with_index(kinds, 1) do
         dies = if number == 2 and Keyword.get(opts, :kill_one, false), do: ["--die-at-first-job"], else: []

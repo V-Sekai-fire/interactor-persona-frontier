@@ -37,7 +37,8 @@ jobs:
           docker network create --subnet 172.28.0.0/24 turbo
           node() { name=$1; address=$2; shift 2; docker run -d --name "$name" --network turbo --ip "$address" -e NODE_NAME="$name@$address" turbo-cluster elixir tools/turbo_cluster.exs "$@"; }
           node coord 172.28.0.10 coordinator frontend/fixtures/scout.cp --power 5 --workers 4 --replicas 2 --problem frontend/fixtures/scout.power5.input.txt --cookie ci
-          docker logs -f coord 2>&1 | grep -m 1 -q "waiting for"
+          # wait for the coordinator's first line; a pipe would wait for `docker logs -f` to end, a process substitution does not
+          grep -m 1 -q "waiting for" <(docker logs -f coord 2>&1)
           worker="worker coord@172.28.0.10 $GUEST $HOST --kind cpu --cookie ci"
           node w1 172.28.0.11 $worker
           node w2 172.28.0.12 $worker

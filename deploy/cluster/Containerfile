@@ -12,5 +12,3 @@ COPY tools tools
 COPY frontend/fixtures frontend/fixtures
 COPY guest/prebuilt guest/prebuilt
 ENV ELIXIR_ERL_OPTIONS=+fnu
-# a node started inside a running VM (Node.start) does not launch the port mapper itself: start it before the command
-ENTRYPOINT ["/bin/sh", "-c", "epmd -daemon; exec \"$@\"", "--"]

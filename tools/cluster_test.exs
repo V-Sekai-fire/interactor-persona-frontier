@@ -68,9 +68,6 @@ case mode do
     elixir = System.find_executable("elixir")
     script = Path.join(root, "tools/turbo_cluster.exs")
     fixtures = Path.join(root, "frontend/fixtures")
-    # the port mapper must run before a node is started inside a running VM
-    epmd = Path.join([:code.root_dir(), "erts-#{:erlang.system_info(:version)}", "bin", "epmd"])
-    System.cmd(epmd, ["-daemon"])
     node = fn name, address, args ->
       Port.open({:spawn_executable, elixir}, [:binary, :exit_status, :stderr_to_stdout, {:line, 4096}, {:cd, root},
         {:env, [{~c"NODE_NAME", ~c"#{name}@#{address}"}, {~c"ELIXIR_ERL_OPTIONS", ~c"+fnu"}]}, {:args, [script | args]}])
