@@ -17,6 +17,10 @@ What to do next. Background: `docs/party-saga.md`, `docs/solver-spec.md`, `docs/
 - Next: add `turbo.gpu.release` as a fourth solver in `tools/party_saga.exs`, run `agree` and compare the frontier.
   Not measured yet: any Party Saga level above `t01`, and speed against CP-SAT.
 
+## Plan from the owner
+- Port Turbo to shader-slang (the repo has a `lean4-gpu-pipeline` route with `slangc`), and only then try a CPU Turbo from the same
+  kernels. Until then Turbo's own `-arch cpu` is the only CPU mode (it passed both controls); it is a separate code path, not the port.
+
 ## Open
 - Hugging Face: the owner asked for the weights and auxiliary files to be on `hf:chibifire`, enough to restart the experiments.
   Not done: `hf` is not logged in (`hf auth login` or `HF_TOKEN`), and which weights is not settled (the ternary student weights in
