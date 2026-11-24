@@ -328,31 +328,27 @@ void deduce(int op, inout Itv r1, inout Itv r2, inout Itv r3)
     }
     case ADD:
     {
-        Itv n1 = r1; Itv n2 = r2; Itv n3 = r3;
-        n1.lower = (yl == MINF || zl == MINF) ? xl : max(xl, yl + zl);
-        n1.upper = (yu == INF || zu == INF) ? xu : min(xu, yu + zu);
-        n2.lower = (xl == MINF || zu == INF) ? yl : max(yl, xl - zu);
-        n2.upper = (xu == INF || zl == MINF) ? yu : min(yu, xu - zl);
-        n3.lower = (xl == MINF || yu == INF) ? zl : max(zl, xl - yu);
-        n3.upper = (xu == INF || yl == MINF) ? zu : min(zu, xu - yl);
-        r1.meet(n1); r2.meet(n2); r3.meet(n3);
+        r1.lower = (yl == MINF || zl == MINF) ? xl : max(xl, yl + zl);
+        r1.upper = (yu == INF || zu == INF) ? xu : min(xu, yu + zu);
+        r2.lower = (xl == MINF || zu == INF) ? yl : max(yl, xl - zu);
+        r2.upper = (xu == INF || zl == MINF) ? yu : min(yu, xu - zl);
+        r3.lower = (xl == MINF || yu == INF) ? zl : max(zl, xl - yu);
+        r3.upper = (xu == INF || yl == MINF) ? zu : min(zu, xu - yl);
         return;
     }
     case MUL:
     {
-        Itv n1 = r1; Itv n2 = r2; Itv n3 = r3;
         if (yl != MINF && yu != INF && zl != MINF && zu != INF)
         {
             t1 = yl * zl;
             t2 = yl * zu;
             t3 = yu * zl;
             t4 = yu * zu;
-            n1.lower = max(xl, min(min(t1, t2), min(t3, t4)));
-            n1.upper = min(xu, max(max(t1, t2), max(t3, t4)));
+            r1.lower = max(xl, min(min(t1, t2), min(t3, t4)));
+            r1.upper = min(xu, max(max(t1, t2), max(t3, t4)));
         }
-        mul_inv(n1, n2, n3);
-        mul_inv(n1, n3, n2);
-        r1.meet(n1); r2.meet(n2); r3.meet(n3);
+        mul_inv(r1, r2, r3);
+        mul_inv(r1, r3, r2);
         return;
     }
     case TDIV:
@@ -360,51 +356,43 @@ void deduce(int op, inout Itv r1, inout Itv r2, inout Itv r3)
     case FDIV:
     case EDIV:
     {
-        Itv n1 = r1; Itv n2 = r2; Itv n3 = r3;
-        itv_div(op, n1, n2, n3);
-        if (!n1.is_bot() && !n3.is_bot())
+        itv_div(op, r1, r2, r3);
+        if (!r1.is_bot() && !r3.is_bot())
         {
-            itv_div_num(op, n1, n2, n3);
-            if (!n2.is_bot()) { itv_div_den(op, n1, n2, n3); }
+            itv_div_num(op, r1, r2, r3);
+            if (!r2.is_bot()) { itv_div_den(op, r1, r2, r3); }
         }
-        r1.meet(n1); r2.meet(n2); r3.meet(n3);
         return;
     }
     case EMOD:
     {
-        Itv n1 = r1; Itv n3 = r3;
-        if (zl == 0) { n3.lower = 1; }
-        if (zu == 0) { n3.upper = -1; }
+        if (zl == 0) { r3.lower = 1; }
+        if (zu == 0) { r3.upper = -1; }
         if (yl == yu && zl == zu)
         {
-            n1.lower = emod(yl, zl);
-            n1.upper = xl;
+            r1.lower = emod(yl, zl);
+            r1.upper = xl;
         }
-        r1.meet(n1); r3.meet(n3);
         return;
     }
     case MIN:
     {
-        Itv n1 = r1; Itv n2 = r2; Itv n3 = r3;
-        n1.lower = max(xl, min(yl, zl));
-        n1.upper = min(xu, min(yu, zu));
-        n2.lower = max(yl, xl);
-        if (xu < zl) { n2.upper = min(yu, xu); }
-        n3.lower = max(zl, xl);
-        if (xu < yl) { n3.upper = min(zu, xu); }
-        r1.meet(n1); r2.meet(n2); r3.meet(n3);
+        r1.lower = max(xl, min(yl, zl));
+        r1.upper = min(xu, min(yu, zu));
+        r2.lower = max(yl, xl);
+        if (xu < zl) { r2.upper = min(yu, xu); }
+        r3.lower = max(zl, xl);
+        if (xu < yl) { r3.upper = min(zu, xu); }
         return;
     }
     case MAX:
     {
-        Itv n1 = r1; Itv n2 = r2; Itv n3 = r3;
-        n1.lower = max(xl, max(yl, zl));
-        n1.upper = min(xu, max(yu, zu));
-        n2.upper = min(yu, xu);
-        if (xl > zu) { n2.lower = max(yl, xl); }
-        n3.upper = min(zu, xu);
-        if (xl > yu) { n3.lower = max(zl, xl); }
-        r1.meet(n1); r2.meet(n2); r3.meet(n3);
+        r1.lower = max(xl, max(yl, zl));
+        r1.upper = min(xu, max(yu, zu));
+        r2.upper = min(yu, xu);
+        if (xl > zu) { r2.lower = max(yl, xl); }
+        r3.upper = min(zu, xu);
+        if (xl > yu) { r3.lower = max(zl, xl); }
         return;
     }
     default: return;

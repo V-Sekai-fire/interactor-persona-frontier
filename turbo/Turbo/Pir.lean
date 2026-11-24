@@ -338,10 +338,8 @@ def mulInv : SlangFunctionDecl :=
 
 def isOne (r : String) : E := land (eq (lower (v r)) (n 1)) (eq (upper (v r)) (n 1))
 def isZero (r : String) : E := land (eq (lower (v r)) (n 0)) (eq (upper (v r)) (n 0))
-def metAll : List S := [meetInto "r1" (v "n1"), meetInto "r2" (v "n2"), meetInto "r3" (v "n3")]
-def copies : List S := copy "n1" (v "r1") ++ copy "n2" (v "r2") ++ copy "n3" (v "r3")
 
-/-- `deduce`: the source embeds each result into the store; here the three intervals are the new store values. -/
+/-- `deduce`: the source embeds each result into the store; here `r1`, `r2`, `r3` are changed in place, as the source changes its copies, and are the new store values. -/
 def deduceFn : SlangFunctionDecl :=
   { name := "deduce", params := param "op" int :: itvInOut,
     body := [
@@ -360,35 +358,35 @@ def deduceFn : SlangFunctionDecl :=
              meetInto "r2" (v "a"), meetInto "r3" (v "b")]
             [.ifThen (le yu zl) [meetInto "r1" (mk (n 1) (n 1))] [when (gt yl zu) [meetInto "r1" (mk (n 0) (n 0))]]]],
          .retVoid],
-      when (eq op opAdd) (copies ++ [
-        .assign (lower (v "n1")) (pick (lor (eq yl minusInfinity) (eq zl minusInfinity)) xl (mx xl (add yl zl))),
-        .assign (upper (v "n1")) (pick (lor (eq yu infinity) (eq zu infinity)) xu (mn xu (add yu zu))),
-        .assign (lower (v "n2")) (pick (lor (eq xl minusInfinity) (eq zu infinity)) yl (mx yl (sub xl zu))),
-        .assign (upper (v "n2")) (pick (lor (eq xu infinity) (eq zl minusInfinity)) yu (mn yu (sub xu zl))),
-        .assign (lower (v "n3")) (pick (lor (eq xl minusInfinity) (eq yu infinity)) zl (mx zl (sub xl yu))),
-        .assign (upper (v "n3")) (pick (lor (eq xu infinity) (eq yl minusInfinity)) zu (mn zu (sub xu yl)))] ++ metAll ++ [.retVoid]),
-      when (eq op opMul) (copies ++ [
+      when (eq op opAdd) ([
+        .assign (lower (v "r1")) (pick (lor (eq yl minusInfinity) (eq zl minusInfinity)) xl (mx xl (add yl zl))),
+        .assign (upper (v "r1")) (pick (lor (eq yu infinity) (eq zu infinity)) xu (mn xu (add yu zu))),
+        .assign (lower (v "r2")) (pick (lor (eq xl minusInfinity) (eq zu infinity)) yl (mx yl (sub xl zu))),
+        .assign (upper (v "r2")) (pick (lor (eq xu infinity) (eq zl minusInfinity)) yu (mn yu (sub xu zl))),
+        .assign (lower (v "r3")) (pick (lor (eq xl minusInfinity) (eq yu infinity)) zl (mx zl (sub xl yu))),
+        .assign (upper (v "r3")) (pick (lor (eq xu infinity) (eq yl minusInfinity)) zu (mn zu (sub xu yl))), .retVoid]),
+      when (eq op opMul) ([
         when (land (land (ne yl minusInfinity) (ne yu infinity)) (land (ne zl minusInfinity) (ne zu infinity)))
           [.declInit int "t1" (mul yl zl), .declInit int "t2" (mul yl zu), .declInit int "t3" (mul yu zl), .declInit int "t4" (mul yu zu),
-           .assign (lower (v "n1")) (mx xl (mn (mn (v "t1") (v "t2")) (mn (v "t3") (v "t4")))),
-           .assign (upper (v "n1")) (mn xu (mx (mx (v "t1") (v "t2")) (mx (v "t3") (v "t4"))))],
-        .expr (call "mul_inv" [v "n1", v "n2", v "n3"]), .expr (call "mul_inv" [v "n1", v "n3", v "n2"])] ++ metAll ++ [.retVoid]),
-      when isDivision (copies ++ [
-        .expr (call "itv_div" [op, v "n1", v "n2", v "n3"]),
-        when (land (.un "!" (call "itv_is_bot" [v "n1"])) (.un "!" (call "itv_is_bot" [v "n3"])))
-          [.expr (call "itv_div_num" [op, v "n1", v "n2", v "n3"]),
-           when (.un "!" (call "itv_is_bot" [v "n2"])) [.expr (call "itv_div_den" [op, v "n1", v "n2", v "n3"])]]] ++ metAll ++ [.retVoid]),
-      when (eq op opEmod) (copies ++ [
-        when (eq zl (n 0)) [.assign (lower (v "n3")) (n 1)], when (eq zu (n 0)) [.assign (upper (v "n3")) m1],
-        when (land (eq yl yu) (eq zl zu)) [.assign (lower (v "n1")) (call "emod" [yl, zl]), .assign (upper (v "n1")) xl]] ++ metAll ++ [.retVoid]),
-      when (eq op opMin) (copies ++ [
-        .assign (lower (v "n1")) (mx xl (mn yl zl)), .assign (upper (v "n1")) (mn xu (mn yu zu)),
-        .assign (lower (v "n2")) (mx yl xl), when (lt xu zl) [.assign (upper (v "n2")) (mn yu xu)],
-        .assign (lower (v "n3")) (mx zl xl), when (lt xu yl) [.assign (upper (v "n3")) (mn zu xu)]] ++ metAll ++ [.retVoid]),
-      when (eq op opMax) (copies ++ [
-        .assign (lower (v "n1")) (mx xl (mx yl zl)), .assign (upper (v "n1")) (mn xu (mx yu zu)),
-        .assign (upper (v "n2")) (mn yu xu), when (gt xl zu) [.assign (lower (v "n2")) (mx yl xl)],
-        .assign (upper (v "n3")) (mn zu xu), when (gt xl yu) [.assign (lower (v "n3")) (mx zl xl)]] ++ metAll ++ [.retVoid])] }
+           .assign (lower (v "r1")) (mx xl (mn (mn (v "t1") (v "t2")) (mn (v "t3") (v "t4")))),
+           .assign (upper (v "r1")) (mn xu (mx (mx (v "t1") (v "t2")) (mx (v "t3") (v "t4"))))],
+        .expr (call "mul_inv" [v "r1", v "r2", v "r3"]), .expr (call "mul_inv" [v "r1", v "r3", v "r2"]), .retVoid]),
+      when isDivision ([
+        .expr (call "itv_div" [op, v "r1", v "r2", v "r3"]),
+        when (land (.un "!" (call "itv_is_bot" [v "r1"])) (.un "!" (call "itv_is_bot" [v "r3"])))
+          [.expr (call "itv_div_num" [op, v "r1", v "r2", v "r3"]),
+           when (.un "!" (call "itv_is_bot" [v "r2"])) [.expr (call "itv_div_den" [op, v "r1", v "r2", v "r3"])]], .retVoid]),
+      when (eq op opEmod) ([
+        when (eq zl (n 0)) [.assign (lower (v "r3")) (n 1)], when (eq zu (n 0)) [.assign (upper (v "r3")) m1],
+        when (land (eq yl yu) (eq zl zu)) [.assign (lower (v "r1")) (call "emod" [yl, zl]), .assign (upper (v "r1")) xl], .retVoid]),
+      when (eq op opMin) ([
+        .assign (lower (v "r1")) (mx xl (mn yl zl)), .assign (upper (v "r1")) (mn xu (mn yu zu)),
+        .assign (lower (v "r2")) (mx yl xl), when (lt xu zl) [.assign (upper (v "r2")) (mn yu xu)],
+        .assign (lower (v "r3")) (mx zl xl), when (lt xu yl) [.assign (upper (v "r3")) (mn zu xu)], .retVoid]),
+      when (eq op opMax) ([
+        .assign (lower (v "r1")) (mx xl (mx yl zl)), .assign (upper (v "r1")) (mn xu (mx yu zu)),
+        .assign (upper (v "r2")) (mn yu xu), when (gt xl zu) [.assign (lower (v "r2")) (mx yl xl)],
+        .assign (upper (v "r3")) (mn zu xu), when (gt xl yu) [.assign (lower (v "r3")) (mx zl xl)], .retVoid])] }
 
 def shaderModule : SlangShaderModule :=
   { structs := [itvStruct],

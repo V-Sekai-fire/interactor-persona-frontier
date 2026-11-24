@@ -60,3 +60,11 @@ Limits of the Lean AST met so far: no `switch` (use `if` chains), only `uint` li
 `den_fdiv` and `den_cdiv` are three levels deep in `den_levels.slang`; `den_tdiv` calls `den_tdiv_zero` instead of itself. With the entry point
 `probe.slang` it compiles for cpp and cuda; spirv compiles but takes about four minutes and writes 26 MB, because every level inlines the one below.
 The Lean version must keep the call tree small (share the `y` split) before the spirv target is usable. The hand-written file stays as the reference to compare against.
+## Differential test (2026-11-24)
+`slang/turbo/oracle/oracle.cpp` runs one `deduce` step of Turbo's own `pir.hpp` (g++, `_DNDEBUG`, the build under `/mnt/fire/6-datasource/turbo-build`, gtest stubbed by `fake/`)
+on 5,400 random boxes: `int_plus`, `int_times`, `int_min`, `int_max`, `int_div`, `int_ediv`, `int_mod`, `int_eq_reif`, `int_le_reif`; 600 each, bounds in -8..8, and about a sixth of the
+variables unbounded except for the division operators (Turbo itself divides by zero there). Its output is `slang/turbo/oracle/reference.txt`.
+`elixir tools/turbo_diff.exs slang/turbo/oracle/reference.txt` compiles the hand-written `pir.slang` and the Lean-emitted module to C++ with slangc and g++, runs both on the same boxes,
+and meets each result with the input box as Turbo's store does. Result: reference vs hand 5,400 of 5,400, reference vs Lean 5,400 of 5,400, hand vs Lean 5,400 of 5,400.
+It found one real fault, fixed: Turbo's macros read `r1` live, so `EMOD` sets `r1.ub() = xl` with the new lower bound. `deduce` now changes `r1`, `r2`, `r3` in place like the source.
+Not covered: `FDIV` and `CDIV` (no FlatZinc name reaches them), one-sided unbounds, the division operators with unbounded variables, `ask` (only `deduce` is compared), many-step fixpoints.
