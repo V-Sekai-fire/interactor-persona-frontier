@@ -162,3 +162,25 @@ The GPU host's `save` and `load`, with handoffs in flight: run some launches on 
 
 ## The planner call per slice (2026-11-24, mission item 2b)
 Each player tick asked the planner with three processes against a database made afresh and migrated every time: migrate 211 ms, import 81 ms, plan 79 ms (about 370 ms). Now the schema and the domain are loaded once per run and each tick does the same two things: import its problem (named by the tick number: a problem with a name already in the database is refused) and plan it, about 120 ms (170 ms measured in a run). The GPU slice default is 500 launches (it was 10, so a 10 ms slice waited 370 ms for its plan). Party, 64 blocks, duty 50, three slices of 500 launches: planner 525.9 ms of 5,662.7 ms, a share of 9.3 percent, same plans (`wait-free`, `solve-slice`), scout through the player unchanged (13 slices, 629 nodes, 511). What is not possible and was never the design: a planner call per 64 Hz frame. Each call starts Lean processes (about 60 ms each); frames are kept by the host's instruction windows inside one process (verified, 2.83 ms worst window against a 2 ms target), and the planner decides once per slice. A resident planner would need the `frontier` service to take the `turbo_solve` problem over A2A, which it does not today.
+
+## What of Turbo's barebones architecture is ported (2026-11-24, read from `src/config.cpp`, `include/config.hpp`, `include/common_solving.hpp`, `include/barebones_dive_and_solve.hpp` of the aaai2026 branch)
+Status: **tested** = checked against Turbo on the three levels or on generated worlds; **ported** = in the code, not checked beyond that; **departure** = done differently, with the reason; **missing** = not in the port.
+
+| Turbo behaviour | Source | Status |
+|---|---|---|
+| FlatZinc parse, ternarize, normalize, simplifier fixpoint, dump of store, bytecodes, strategies, objective | `preprocess_tcn`, `preprocess` | tested on scout, party, saga (byte-equal); the objective line of a satisfaction problem and of `minimize` only |
+| `minimize(x)`: search minimizes `x` | `bab`, `minimize_obj_var` | tested |
+| `maximize(x)`: variable `__MINIMIZE_OBJ` with the constraint `__MINIMIZE_OBJ = -x` added before ternarizing, search minimizes it | `find_maximize_var`, `add_minimize_objective_var` (lines 486 to 507, called at 604 to 612) | **missing** (the front end names `x` itself as the objective and the solver ignores the `optimization` line, so a maximize model is searched as a minimization) |
+| satisfaction problem: stop at the first solution (`stop_after_n_solutions` is 1 by default) | `config.hpp:63` | ported, untested |
+| `-a` all solutions, `-n N` stop after N solutions, `-i` intermediate solutions | `config.cpp:143 to 148` | missing (the player prints the best on each slice; `-n` is not read) |
+| `-sub P` subproblem power, `-or N` / `-p N` blocks, `-cutnodes N` | `config.cpp:136 to 144` | tested (`--power`, `--blocks`, `--stop-nodes`) |
+| `-t`, `-timeout` | `config.cpp:140` | departure: time is a slice of launches under a duty, not a wall-clock limit |
+| `-seed`, random variable order | `barebones_dive_and_solve.hpp:195` | not needed: the source runs `RANDOM` through the `INPUT_ORDER` code, so the seed changes nothing in this architecture |
+| variable orders `INPUT_ORDER`, `FIRST_FAIL`, `ANTI_FIRST_FAIL`, `LARGEST`, `SMALLEST` and value orders from the strategy annotations | `barebones_dive_and_solve.hpp:195 to 220` | ported as data (`strategies`); tested only for the orders that scout, party and saga use |
+| `-fp ac1` / `wac1`, `-wac1_threshold` | `config.cpp:183 to 195` | departure: the fixpoint is the same for either schedule (propagators are monotone), the port uses an incremental schedule; node counts are equal, tested |
+| `-eps_var_order`, `-eps_value_order` (the order of the splitting into subproblems) | `config.cpp:197 to 206` | ported as the default order only; the pair of options is missing |
+| `-disable_simplify`, `-force_ternarize`, `-network_analysis`, `-ast`, `-s`, `-v`, `-globalmem`, `-version`, `-hardware`, `-f` free search | `config.cpp:153 to 213` | missing or not applicable (diagnostic or reporting options; `-f` was not read yet) |
+| `-arch cpu / hybrid / gpu` | `config.cpp:164` | not ported: only `barebones` is the target, by the owner's choice |
+| global constraints beyond the ternary normal form (`turbo_fzn_*` predicates, table, XCSP3 input) | parser tables in lala-parsing | not read yet; the MiniZinc library compiled for the `org.minizinc.mzn-fzn` solver decomposes them, which is all the three levels reach |
+
+One row is a defect, not a choice: `maximize`. It is closed next, against the oracle.
