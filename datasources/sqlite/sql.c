@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 // The one C shim: SQLite in, JSON rows out. Nothing else crosses the ABI.
 // FRONTIER_VFS_EXT names datasource-store's fdb_vfs_ext loadable extension; with it loaded,
 // a database URL of file:frontier?vfs=weft_fdb keeps the pages in FoundationDB.

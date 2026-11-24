@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+// SPDX-FileCopyrightText: 2025 Pierre Talbot
+// SPDX-FileCopyrightText: 2021 Pierre Talbot, Frédéric Pinel
+// SPDX-License-Identifier: Apache-2.0 AND MIT
 // Runs the solver guest ELF under libriscv and talks to a worker node over stdin and stdout in length-prefixed frames (an Erlang Port with {packet, 4}).
 // host to worker: "H" hello | "A skip bound solutions nodes" (the guest waits for a subproblem; bound is this guest's best) | "U bound" a better bound than the last report | "R nodes fails solutions bound depth_max exhaustive" then n lines "lower upper"
 // worker to host: "P" problem text | "S index bound" assign a subproblem | "D" no more subproblems | "B bound" a better bound found elsewhere | "C" cancel the subproblem in hand (another node finished it) | "X" stop

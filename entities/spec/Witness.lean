@@ -1,3 +1,5 @@
+-- SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+-- SPDX-License-Identifier: Apache-2.0 OR MIT
 import Frontier.Loop
 /-!
 # The green gate. Every invariant has a positive and a negative control; exit 0 and `OK:` when all hold.

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 // x = y + z over interval domains; one thread per constraint. A hello kernel for the TNF port (not the real format).
 struct Constraint { uint x; uint y; uint z; uint op; };   // op 0 = add
 RWStructuredBuffer<int> lower;

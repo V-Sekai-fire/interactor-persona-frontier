@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 # Form a FoundationDB cluster from whatever machines Fly has started.
 #
 # The problem this solves. A coordinator list has to be written into a cluster file before

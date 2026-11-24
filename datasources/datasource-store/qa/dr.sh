@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 # The disaster recovery procedure, run end to end: back up, lose everything, restore.
 #
 # Losing consensus (qa.sh stage 6) is survivable — quorum comes back and the data is still

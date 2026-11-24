@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 # Assert the backup is fresh, from the one place that already holds the
 # credentials: the cluster machine. CI has no production access and the spend
 # keeper's authority should not grow a monitoring pattern, so the check runs

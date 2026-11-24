@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+# SPDX-FileCopyrightText: 2025 Pierre Talbot
+# SPDX-FileCopyrightText: 2021 Pierre Talbot, Frédéric Pinel
+# SPDX-License-Identifier: Apache-2.0 AND MIT
 # A local web console for the time-sliced solver: the free-time gate (load and GPU), each level's player log, progress against Turbo's node count and the planner's step.
 # Usage: elixir tools/turbo_console.exs [RUN_DIR] [--port 9931]   RUN_DIR holds the *.player.log files (default /mnt/fire/6-datasource/turbo-runs). Listens on 127.0.0.1 only.
 {opts, args, _} = OptionParser.parse(System.argv(), strict: [port: :integer])

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+# SPDX-FileCopyrightText: 2025 Pierre Talbot
+# SPDX-FileCopyrightText: 2021 Pierre Talbot, Frédéric Pinel
+# SPDX-License-Identifier: Apache-2.0 AND MIT
 # Solve a problem dumped from Turbo's preprocessing (slang/turbo/oracle/cp_dump.cpp) with the Lean-emitted barebones search (turbo/Turbo/Solve.lean) on the CPU.
 # The search is reentrant: it runs `--slice N` nodes, writes its whole state to the checkpoint file and returns; the next call resumes from the file, so it can be
 # timesliced, paused for hours and restarted. Without `--once` this tool calls it again until the search is done (`--pause-ms` between slices).

@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+// SPDX-FileCopyrightText: 2025 Pierre Talbot
+// SPDX-FileCopyrightText: 2021 Pierre Talbot, Frédéric Pinel
+// SPDX-License-Identifier: Apache-2.0 AND MIT
 // Runs the cooperative Slang solver (turbo/Turbo/Coop.lean, compiled to a cubin) on the GPU in short bounded launches.
 // Usage: turbo_gpu KERNEL.cubin INPUT.txt BLOCKS SLICE_NODES [PAUSE_MS]
 // TURBO_SERVE=1 keeps the process resident and reads commands on standard input, one per line, answering one line each:

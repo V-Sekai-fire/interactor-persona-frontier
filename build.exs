@@ -1,4 +1,6 @@
 #!/usr/bin/env elixir
+# SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 # One command, no arguments: a fresh clone builds the node and its gates and runs them.
 #   elixir build.exs
 # Installs what is missing through brew (macOS) or apt (Debian/Ubuntu): elan (the Lean toolchain

@@ -1,3 +1,5 @@
+-- SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+-- SPDX-License-Identifier: Apache-2.0 OR MIT
 import Frontier.Import
 /-! The stored planner documents: `frontier_store migrate | domain NAME | problem NAME | plan PROBLEM | import FILE... | fixtures ROOT`. -/
 open Lean Frontier

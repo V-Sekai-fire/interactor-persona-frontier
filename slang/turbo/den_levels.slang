@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+// SPDX-FileCopyrightText: 2025 Pierre Talbot
+// SPDX-FileCopyrightText: 2021 Pierre Talbot, Frédéric Pinel
+// SPDX-License-Identifier: Apache-2.0 AND MIT
 // Included three times by pir.slang: Turbo recurses in den_fdiv and den_cdiv, the compiler allows no recursion, so each level calls the one below it.
 Itv SELF_FDIV(Itv r1, Itv r2)
 {

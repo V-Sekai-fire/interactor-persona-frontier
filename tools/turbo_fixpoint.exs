@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+# SPDX-FileCopyrightText: 2025 Pierre Talbot
+# SPDX-FileCopyrightText: 2021 Pierre Talbot, Frédéric Pinel
+# SPDX-License-Identifier: Apache-2.0 AND MIT
 # Run the Lean-emitted Gauss-Seidel fixpoint (turbo/Turbo/Fixpoint.lean, CPU target) on a problem dumped from Turbo's PIR
 # (slang/turbo/oracle/dump.cpp) and compare the final store with Turbo's own fixpoint.
 # Usage: elixir tools/turbo_fixpoint.exs <problem.dump>

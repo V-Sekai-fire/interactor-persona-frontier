@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 // A commit too large for one FoundationDB transaction.
 //
 //   prove_big_commit <db> <rows> <blob_bytes>

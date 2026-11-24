@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 # Put the Slang SDK where contract-lean-slang's extern_lib looks for slang.h: <package>/vendor/{include,lib}.
 # Run after the dependencies are fetched (`lake resolve-deps`). The SDK is unpacked once into .slang/.
 version = "2026.20"

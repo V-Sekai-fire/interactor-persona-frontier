@@ -1,3 +1,5 @@
+-- SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+-- SPDX-License-Identifier: Apache-2.0 OR MIT
 /-! # Frontier learning over the store's attacks (RFD 2323)
 
 A level is an attack template with fixed attributes; a problem is one run of it. Each level

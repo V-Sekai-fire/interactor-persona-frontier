@@ -1,4 +1,6 @@
 #!/usr/bin/bash
+# SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 set -u
 cd "$(dirname "$0")/.."
 stage() {

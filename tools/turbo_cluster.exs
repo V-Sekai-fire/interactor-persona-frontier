@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+# SPDX-FileCopyrightText: 2025 Pierre Talbot
+# SPDX-FileCopyrightText: 2021 Pierre Talbot, Frédéric Pinel
+# SPDX-License-Identifier: Apache-2.0 AND MIT
 # Distributed solving over Erlang distribution: a coordinator node hands out subproblems and shares the best bound; worker nodes (one per core, GPU or machine) each run
 # the solver guest ELF under libriscv. Nodes are cookie-authenticated Erlang nodes, so a worker can be on another machine: start it there with the same cookie.
 #   coordinator:  elixir --name coord@HOST --cookie C tools/turbo_cluster.exs coordinator LEVEL.cp [--power P] [--workers N] [--steal-after-ms MS] [--no-steal]

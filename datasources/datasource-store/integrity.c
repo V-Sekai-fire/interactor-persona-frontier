@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 // Ask SQLite to check a database that lives in FoundationDB.
 //
 //   integrity <db>

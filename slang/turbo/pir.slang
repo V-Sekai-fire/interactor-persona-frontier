@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+// SPDX-FileCopyrightText: 2025 Pierre Talbot
+// SPDX-FileCopyrightText: 2021 Pierre Talbot, Frédéric Pinel
+// SPDX-License-Identifier: Apache-2.0 AND MIT
 // Copy of lala_pc pir.hpp (ask, itv_div, num_*, den_*, mul_inv, deduce) and the battery division helpers. Names and structure kept.
 // Lattice: lower bound meets by max, upper bound meets by min; join is the hull; bot is lb > ub; top is [MINF, INF].
 

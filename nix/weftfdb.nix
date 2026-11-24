@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 { stdenv, fetchgit, cmake, foundationdb, sqlite }:
 
 # The store's FoundationDB virtual file system, as the loadable module the planner opens its database through.

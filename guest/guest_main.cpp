@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+// SPDX-FileCopyrightText: 2025 Pierre Talbot
+// SPDX-FileCopyrightText: 2021 Pierre Talbot, Frédéric Pinel
+// SPDX-License-Identifier: Apache-2.0 AND MIT
 // The guest of the time-sliced, distributed solver: the Slang `solve` kernel (as C++) run by a host through libriscv.
 // Syscalls (host side in host/turbo_host.cpp): 500 problem text, 501 await a subproblem, 502 result.
 #include "slang-cpp-prelude.h"

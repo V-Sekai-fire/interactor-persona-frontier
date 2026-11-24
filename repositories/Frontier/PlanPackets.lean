@@ -1,3 +1,5 @@
+-- SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+-- SPDX-License-Identifier: Apache-2.0 OR MIT
 import Lean.Data.Json
 import EntityPacket.Codec
 import EntityPacket.Classes

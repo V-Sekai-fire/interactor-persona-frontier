@@ -1,3 +1,5 @@
+-- SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+-- SPDX-License-Identifier: Apache-2.0 OR MIT
 import Lean.Data.Json
 import Frontier.PlanPackets
 /-! `frontier_packets STEPS.json OUT.bin`: encode a plan's steps as 100-byte entity packets, decode them back and check. -/

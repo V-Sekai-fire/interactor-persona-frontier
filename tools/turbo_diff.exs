@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+# SPDX-FileCopyrightText: 2025 Pierre Talbot
+# SPDX-FileCopyrightText: 2021 Pierre Talbot, Frédéric Pinel
+# SPDX-License-Identifier: Apache-2.0 AND MIT
 # Compare one deduce step of three implementations on the same boxes: Turbo's pir.hpp (reference file),
 # the hand-written slang/turbo/pir.slang, and the Lean-emitted module (.lake/build/bin/turbo_emit).
 # Usage: elixir tools/turbo_diff.exs <reference.txt> ; lines are "name xl xu yl yu zl zu | rxl rxu ryl ryu rzl rzu ask_before ask_after".

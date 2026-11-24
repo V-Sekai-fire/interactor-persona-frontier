@@ -1,3 +1,7 @@
+-- SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+-- SPDX-FileCopyrightText: 2025 Pierre Talbot
+-- SPDX-FileCopyrightText: 2021 Pierre Talbot, Frédéric Pinel
+-- SPDX-License-Identifier: Apache-2.0 AND MIT
 import Turbo.Solve
 
 /-! The cooperative GPU form of `Turbo.Solve`: one workgroup of 256 threads is one block of the source (`barebones_dive_and_solve.hpp`), as in Turbo's own kernel.

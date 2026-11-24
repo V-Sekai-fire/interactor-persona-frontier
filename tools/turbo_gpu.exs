@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+# SPDX-FileCopyrightText: 2025 Pierre Talbot
+# SPDX-FileCopyrightText: 2021 Pierre Talbot, Frédéric Pinel
+# SPDX-License-Identifier: Apache-2.0 AND MIT
 # Solve a dumped problem on the GPU with the cooperative Slang kernel (turbo/Turbo/Coop.lean): build the cubin and the CUDA host when they are stale, make the input, run
 # in bounded launches under a duty-cycle cap. The game on this machine uses the same GPU, so the run waits until the GPU is under --max-gpu percent busy.
 # `--prepare` builds and prints three lines (cubin, host binary, input folder) without running; tools/turbo_player.exs --engine gpu uses it.

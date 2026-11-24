@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 // Prove that the clock works through weft_fdb on a SQLite with no xCurrentTime.
 //
 //   prove_clock <db>
