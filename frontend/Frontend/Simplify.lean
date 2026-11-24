@@ -310,7 +310,7 @@ def interpretTnf (children : Array F) : Sim := Id.run do
       let (st', _) := st.embed cons[i]!.x ⟨0, 1⟩
       st := st'
   let bcs := (cons.zip isCon).foldl (fun acc (c, b) => if b then acc.push c else acc) #[]
-  let bcs := bcs.insertionSort (fun a b =>
+  let bcs := bcs.qsort (fun a b =>
     if sigIdx a.op != sigIdx b.op then sigIdx a.op < sigIdx b.op
     else if a.y != b.y then a.y < b.y
     else if a.x != b.x then a.x < b.x
@@ -416,7 +416,7 @@ def preprocessTcn (tnf : F) (extra : Array F) : Dump := Id.run do
       let (st', _) := st.embed c.x ⟨0, 1⟩
       st := st'
   let consAfter := bcs.size
-  bcs := bcs.insertionSort (fun a b =>
+  bcs := bcs.qsort (fun a b =>
     if sigIdx a.op != sigIdx b.op then sigIdx a.op < sigIdx b.op
     else if a.y != b.y then a.y < b.y
     else if a.x != b.x then a.x < b.x
