@@ -37,3 +37,4 @@ its C++ target rejects buffer atomics. `tools/party_saga.exs dump TRACK G SEED O
 - 2026-11-24: Lean module now has ask/deduce for every operator; emitted text compiles for cpp and cuda (spirv not rechecked). CI fetches the Slang SDK with tools/slang_vendor.exs. Next: run the cpp output against pir.slang on sample intervals.
 - 2026-11-24: differential test passes (tools/turbo_diff.exs, 5400 boxes): Turbo pir.hpp = hand pir.slang = Lean-emitted. Not covered: fdiv/cdiv, ask, fixpoints, spirv size.
 - 2026-11-24: P2 done on the CPU: Lean-emitted Gauss-Seidel fixpoint equals Turbo on scout/party/saga levels (tools/turbo_fixpoint.exs). Next: P3 search and objective, then P4 GPU (Jacobi + atomics) and timings.
+- 2026-11-24: P3 on the CPU matches Turbo barebones (scout exact, party at 2000 nodes). Host has 8 threads: run jobs niced, one core at most. Next: party/saga to the end, GPU cooperative kernel, spirv size, solution output, party_saga.exs hook.

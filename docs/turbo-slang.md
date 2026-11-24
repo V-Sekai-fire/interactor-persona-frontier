@@ -79,3 +79,14 @@ rewrite unit clauses `bool_clause([x],[])` to `bool_eq(x,true)` and the `solve` 
 Result (CPU, one thread, `g++ -O2`): the final store equals Turbo's on every variable for
 scout (g=2, seed 1) 4,869 variables and 4,544 bytecodes, 9 rounds, 6 ms; party (g=4, seed 2) 40,559 and 39,810, 11 rounds, 36 ms; saga (g=6, seed 3) 306,406 and 304,170, 13 rounds, 230 ms.
 Not done: Turbo's simplifier and `preprocess_tcn` (the dump takes the plain ternarized formula), search, the objective, the GPU path (Jacobi sweeps with atomics), `ask`/extraction.
+## P3 search and branch and bound (2026-11-24)
+`turbo/Turbo/Solve.lean` is `barebones_dive_and_solve.hpp` for one thread per block on the CPU target: `propagate` (fixpoint, then the `ask` scan for a solution), `split` with the five variable orders and four value orders,
+decisions with ropes, backtracking from the root snapshot, objective tightening from `appx_best_bound`, and the dive over `2^power` subproblems. `tools/turbo_solve.exs` runs it on a dump of Turbo's own preprocessing
+(`slang/turbo/oracle/cp_dump.cpp`: parse, ternarize, simplify, strategies, objective), with `--blocks`, `--power`, `--stop-nodes`.
+Two guarded departures from the source, both only on a path where the source reads out of range: a failed `split` is read from its return value (the source checks `decisions[depth-1]`, which is the previous decision), and a satisfaction problem (no objective) stops at its first solution (the source's barebones mode is minimization only).
+Compared with Turbo's GPU solver (`-arch barebones -or 1 -sub 0`):
+| level | Turbo | Slang |
+|---|---|---|
+| scout (3,220 variables after preprocessing) | 629 nodes, 8 solutions, objective 511 | 629 nodes, 8 solutions, 307 fails, objective 511, exhaustive |
+| party, cut at 2,000 nodes (27,880 variables) | 2,000 nodes, 3 solutions, objective 809 | 2,000 nodes, 3 solutions, 995 fails, objective 809 |
+Scout with 4 blocks and `--power 3` also reaches 511. The full party level takes Turbo's GPU 469,302 nodes and 763 s (objective 795); it was not run to the end on the CPU. Saga was not run.
