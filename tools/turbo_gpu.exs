@@ -11,8 +11,9 @@ root = File.cwd!()
 sdk = Path.join(root, ".slang/2026.20")
 runs = "/mnt/fire/6-datasource/turbo-runs"
 nvcc_env = System.get_env("CUDA_ENV", "/mnt/fire/6-datasource/turbo-build/cuda/.pixi/envs/default")
-blocks = Keyword.get(opts, :blocks, 256)
-power = Keyword.get(opts, :power, 13)
+# 64 blocks and no up-front split: measured on party (3.5 s, against 1.5 s on 256) and saga (13.2 s, against 16.4 s on 256 and 30 s on one block); see docs/turbo-slang.md
+blocks = Keyword.get(opts, :blocks, 64)
+power = Keyword.get(opts, :power, 0)
 slice = Keyword.get(opts, :slice, 1)
 duty = Keyword.get(opts, :duty, 100.0)
 max_gpu = Keyword.get(opts, :max_gpu, 30)
