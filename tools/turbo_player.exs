@@ -17,10 +17,11 @@
 {opts, [cp_path], _} = OptionParser.parse(System.argv(), strict: [slice: :integer, max_load: :float, max_gpu: :integer, poll_ms: :integer, max_slices: :integer, checkpoint: :string, engine: :string, blocks: :integer, power: :integer, gpu_slice: :integer, duty: :float, save_every: :integer, fzn: :string, printer: :string])
 engine = Keyword.get(opts, :engine, "cpu")
 gpu? = engine == "gpu"
-# a slice must be long against the planner call (about 120 ms): 500 launches
-# a launch is a time budget of the real-time contract (a sixteenth of a 64 Hz frame, about a millisecond), not a node count: the kernel stops it by its own clock
-launch_us = 1000
-slice = Keyword.get(opts, :slice, if(gpu?, do: 500, else: 100))
+# The frame is 64 Hz, as for the CPU host. One launch and its pause fill one frame, so a launch is the duty's share of a frame (25 percent of 15.6 ms is 3.9 ms) and a slice of 64
+# launches is one second: long against the planner call (about 120 ms), and a fifth of the 5 s a FoundationDB transaction may live. No node count, no other constant.
+frame_hz = 64
+launch_us = round(Keyword.get(opts, :duty, 25.0) / 100 * 1_000_000 / frame_hz)
+slice = Keyword.get(opts, :slice, if(gpu?, do: 64, else: 100))
 max_load = Keyword.get(opts, :max_load, 4.0)
 max_gpu = Keyword.get(opts, :max_gpu, 30)
 poll_ms = Keyword.get(opts, :poll_ms, 2000)
