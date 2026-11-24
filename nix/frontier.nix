@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
 # SPDX-License-Identifier: Apache-2.0 OR MIT
-{ lib, stdenv, fetchgit, leanToolchain, git, cacert, autoPatchelfHook }:
+{ lib, stdenv, fetchgit, fetchurl, leanToolchain, git, cacert, autoPatchelfHook }:
 
 # Lake resolves its dependencies from git and checks each checkout's revision, so every dependency is
 # fetched with its .git kept, at the revision in the planner's lake-manifest.json, and placed in
@@ -27,6 +27,11 @@ let
     (dep "LeanSlang" "https://github.com/V-Sekai-fire/contract-lean-slang"
       "01dbd396639f3ea44c87bef209a1449bd8d12844" "sha256-gyMUuA8aOAijXzNmM71yVyL41wQLpol6+ZFBd3SU4EE=")
   ];
+  # contract-lean-slang compiles a C++ shim against slang.h from vendor/include of its checkout
+  slangSdk = fetchurl {
+    url = "https://github.com/shader-slang/slang/releases/download/v2026.20/slang-2026.20-linux-x86_64.tar.gz";
+    hash = "sha256-6GPlaMIEgQ1ui8MYUvBWrvZ2PFXqmSXbLbev+gYDR8k=";
+  };
 in
 stdenv.mkDerivation {
   pname = "frontier";
@@ -49,6 +54,9 @@ stdenv.mkDerivation {
       cp -r ${d.src} .lake/packages/${d.name}
       chmod -R u+w .lake/packages/${d.name}
     '') deps}
+    mkdir -p .lake/packages/LeanSlang/vendor .slang-sdk
+    tar xzf ${slangSdk} -C .slang-sdk
+    cp -r .slang-sdk/include .slang-sdk/lib .lake/packages/LeanSlang/vendor/
     lake build frontier frontier_witness frontier_store frontier_packets
     runHook postBuild
   '';
