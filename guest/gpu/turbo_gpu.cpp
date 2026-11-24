@@ -259,6 +259,7 @@ int main(int argc, char** argv) {
     long nodes = 0;
     for (int b = 0; b < blocks; ++b) nodes += state[b * STATE + 7];
     printf("status done nodes %ld\n", nodes);
+    { int exhaustive = 0; for (int b = 0; b < blocks; ++b) exhaustive += state[b * STATE + 10] == 1; printf("exhaustive blocks %d of %d\n", exhaustive, blocks); }
     printf("error %d approx %d next %d\n", control[12], control[11], control[10]);
     int best = -1;
     for (int b = 0; b < blocks; ++b) {

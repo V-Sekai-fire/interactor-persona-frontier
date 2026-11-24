@@ -8,7 +8,7 @@
 # `--sort-ops` orders the bytecodes by operator (stable): neighbouring GPU threads then run the same operator. The fixpoint, and so every node, is unchanged.
 # `--prepare` only builds the solver and its input (under the temp directory, one folder per problem) and prints that folder: the binary there takes `input.txt CHECKPOINT SLICE`.
 # Usage: elixir tools/turbo_solve.exs <problem.cp> [--blocks N] [--power P] [--stop-nodes N] [--max-depth D] [--slice N] [--checkpoint FILE] [--once] [--pause-ms M]
-{opts, [dump_path], _} = OptionParser.parse(System.argv(), strict: [blocks: :integer, power: :integer, stop_nodes: :integer, max_depth: :integer, eps: :boolean, prepare: :boolean, sort_ops: :boolean, slice: :integer, checkpoint: :string, once: :boolean, pause_ms: :integer])
+{opts, [dump_path], _} = OptionParser.parse(System.argv(), strict: [input_only: :boolean, blocks: :integer, power: :integer, stop_nodes: :integer, max_depth: :integer, eps: :boolean, prepare: :boolean, sort_ops: :boolean, slice: :integer, checkpoint: :string, once: :boolean, pause_ms: :integer])
 blocks = Keyword.get(opts, :blocks, 1)
 power = Keyword.get(opts, :power, 0)
 stop_nodes = Keyword.get(opts, :stop_nodes, 2_147_483_647)
@@ -59,6 +59,11 @@ File.mkdir_p!(scratch)
 checkpoint = Keyword.get(opts, :checkpoint, Path.join(scratch, "checkpoint.bin"))
 header = [n, m, strategy_count, objective, power, max_depth, blocks, stop_nodes, eps, length(strategy_vars)]
 File.write!(Path.join(scratch, "input.txt"), Enum.join(header ++ List.flatten(Enum.map(store, ints)) ++ code ++ strategies ++ strategy_vars, " ") <> "\n")
+# --input-only writes the solver input and prints its folder, building nothing (the GPU host and the cluster read the same text)
+if Keyword.get(opts, :input_only, false) do
+  IO.puts(scratch)
+  System.halt(0)
+end
 
 File.write!(Path.join(scratch, "driver.cpp"), """
 #include "slang-cpp-prelude.h"
