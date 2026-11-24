@@ -3,7 +3,8 @@
 # Compare the Lean front end with Turbo's statistics for a FlatZinc file: frontier_frontend --stats FILE.fzn against frontend/expected/LEVEL.stats.
 # Every key of the expected file is compared: the parse and TNF counts, the simplifier's per-iteration and total eliminations, the variable and constraint counts.
 # With a third argument (the oracle's dump, for instance /mnt/fire/6-datasource/turbo-runs/scout.cp) `frontier_frontend --dump` must also be byte equal.
-# Usage: elixir tools/frontend_check.exs LEVEL FILE.fzn [ORACLE.cp]   (LEVEL is scout, party or saga); exits 1 on a difference.
+# With a fourth argument (the player's result file, for instance /tmp/turbo_solve/scout/result.txt) `frontier_frontend --solution` must equal what the oracle `cp_dump` prints under TURBO_BEST.
+# Usage: elixir tools/frontend_check.exs LEVEL FILE.fzn [ORACLE.cp [RESULT.txt]]   (LEVEL is scout, party or saga); exits 1 on a difference.
 [level, fzn | rest] = System.argv()
 root = File.cwd!()
 parse = fn text -> text |> String.split("\n", trim: true) |> Map.new(fn line -> [k, v] = String.split(line, "=", parts: 2); {k, v} end) end
@@ -19,6 +20,15 @@ bad =
   end
 dump_bad =
   case rest do
+    [oracle, result] ->
+      {mine, 0} = System.cmd(Path.join(root, ".lake/build/bin/frontier_frontend"), ["--dump", fzn])
+      ok = mine == File.read!(oracle)
+      IO.puts("#{if ok, do: "ok  ", else: "FAIL"} dump equals #{oracle}")
+      {sol, 0} = System.cmd(Path.join(root, ".lake/build/bin/frontier_frontend"), ["--solution", fzn, result])
+      {ref, _} = System.cmd("/mnt/fire/6-datasource/turbo-runs/cp_dump", ["-arch", "barebones", "-or", "1", "-sub", "0", fzn], env: [{"TURBO_BEST", result}], stderr_to_stdout: false)
+      ok2 = sol == ref
+      IO.puts("#{if ok2, do: "ok  ", else: "FAIL"} solution equals the oracle's print_solution (#{byte_size(sol)} bytes)")
+      if ok and ok2, do: 0, else: 1
     [oracle] ->
       {mine, 0} = System.cmd(Path.join(root, ".lake/build/bin/frontier_frontend"), ["--dump", fzn])
       ok = mine == File.read!(oracle)

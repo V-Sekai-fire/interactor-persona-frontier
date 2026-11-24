@@ -5,6 +5,7 @@
 import Frontend.Fzn
 import Frontend.Ternarize
 import Frontend.Simplify
+import Frontend.Output
 /-! `frontier_frontend --stats FILE.fzn`: the statistics Turbo prints after `parse_cn` and after ternarize and normalize; `--tnf FILE.fzn`: the ternary normal form as canonical text, one conjunct per line. -/
 open Frontend
 
@@ -59,4 +60,16 @@ def main (args : List String) : IO UInt32 := do
       let out ← IO.getStdout
       out.putStr (preprocessTcn tnf extra).text
       return 0
-  | _ => IO.eprintln "usage: frontier_frontend (--stats | --tnf | --dump) FILE.fzn"; return 2
+  | ["--solution", path, result] => do
+    let bytes ← IO.FS.readBinFile path
+    match parseFlatzinc bytes with
+    | .error e => IO.eprintln s!"Could not parse input file: {e}"; return 1
+    | .ok p =>
+      for w in p.warnings do IO.eprintln w
+      let (tnf, extra) := normalizeWith (ternarizeFormula p.formula #[0, 1, 2]) #[]
+      let d := preprocessTcn tnf extra
+      let values := parseResult (← IO.FS.readFile result)
+      let out ← IO.getStdout
+      out.putStr (solutionText p.out d.info values)
+      return 0
+  | _ => IO.eprintln "usage: frontier_frontend (--stats | --tnf | --dump) FILE.fzn | --solution FILE.fzn RESULT.txt"; return 2

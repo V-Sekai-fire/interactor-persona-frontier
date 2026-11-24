@@ -361,6 +361,16 @@ def runLoop (s : Sim) (numVars : Nat) : Sim × Array (Nat × Stats) × Stats × 
     total := { icse := total.icse + t.icse, eqs := total.eqs + t.eqs, alg := total.alg + t.alg, entailed := total.entailed + t.entailed, icseIter := total.icseIter + t.icseIter }
   return (s, per, total, iters)
 
+/-- What `Simplifier::print_variable` needs to print the value of an original variable: its class representative, whether that survived into the
+    final store (and under which index), and otherwise the constant of the class. -/
+structure SolInfo where
+  idx : HashMap String Nat := {}
+  eqc : Array Nat := #[]
+  elimV : Array Bool := #[]
+  newIdx : Array Nat := #[]
+  consts : Array Itv := #[]
+  sorts : Array Srt := #[]
+
 /-- The result of the whole front end after the simplifier: what `cp_dump` prints. -/
 structure Dump where
   bot : Bool
@@ -377,6 +387,7 @@ structure Dump where
   eliminatedVars : Nat
   varsAfter : Nat
   consAfter : Nat
+  info : SolInfo := {}
 
 def varOrderOf : String → Nat
   | "input_order" => 0 | "first_fail" => 1 | "anti_first_fail" => 2 | "smallest" => 3 | "largest" => 4 | "random" => 5 | _ => 0
@@ -451,7 +462,8 @@ def preprocessTcn (tnf : F) (extra : Array F) : Dump := Id.run do
     | _ => pure ()
   strats := strats.push (1, 0, #[])
   return { bot := false, vars := vars, bcs := bcs, strats := strats, objective := objective, isMin := isMin, tnfVars := numVars, tnfCons := tnfCons,
-           per := per, total := total, iters := iters, eliminatedVars := elimCount, varsAfter := vars.size, consAfter := consAfter }
+           per := per, total := total, iters := iters, eliminatedVars := elimCount, varsAfter := vars.size, consAfter := consAfter,
+           info := { idx := s.idx, eqc := s.eqc, elimV := s.elimV, newIdx := newIdx, consts := consts, sorts := s.sorts } }
 
 def opText : Sig → String
   | .ADD => "+" | .MUL => "*" | .MIN => "min" | .MAX => "max" | .EQ => "=" | .LEQ => "≤"

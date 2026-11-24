@@ -69,16 +69,16 @@ defmodule Saga do
   def solver_env("turbo" <> _), do: [{"MZN_SOLVER_PATH", Path.join(System.get_env("TURBO_HOME", "/mnt/fire/6-datasource/turbo-build"), "msc")}]
   def solver_env(_), do: []
   def agree_solvers, do: ~w(chuffed gecode) ++ if(System.get_env("TURBO_HOME"), do: ["turbo.gpu.release"], else: []) ++ if(System.get_env("TURBO_SLANG"), do: ["turbo-slang"], else: [])
-  # The Slang port of Turbo: compile to FlatZinc with Turbo's library, dump Turbo's preprocessing, search through the planner player on the GPU, print with Turbo's printer, map back with the .ozn.
+  # The Slang port of Turbo: compile to FlatZinc with MiniZinc's own library (the fzn is identical to the one Turbo's `mzn-lib` gives: its `redefinitions.mzn` is empty), dump the preprocessing with the Lean front end (`frontier_frontend --dump`), search through the planner player on the GPU, print with the Lean front end (`--solution`), map back with the .ozn.
   def run("turbo-slang", model, dzn, limit_s) do
-    runs = "/mnt/fire/6-datasource/turbo-runs"
+    frontend = Path.expand("../.lake/build/bin/frontier_frontend", __DIR__)
     work = Path.join(System.tmp_dir!(), "slang-#{System.unique_integer([:positive])}")
     File.mkdir_p!(work)
     [fzn, ozn, cp] = for ext <- ~w(fzn ozn cp), do: Path.join(work, "party." <> ext)
-    env = [{"LD_LIBRARY_PATH", Path.join(@home, "lib")}] ++ solver_env("turbo")
+    env = [{"LD_LIBRARY_PATH", Path.join(@home, "lib")}]
     {us, status_out} = :timer.tc(fn ->
-      {_, 0} = System.cmd(Path.join(@home, "bin/minizinc"), ["--solver", "turbo.gpu.release", "-c", "--fzn", fzn, "--ozn", ozn, model, dzn], env: env, stderr_to_stdout: true)
-      {dump, 0} = System.cmd(Path.join(runs, "cp_dump"), ["-arch", "barebones", "-or", "1", "-sub", "0", fzn], stderr_to_stdout: false)
+      {_, 0} = System.cmd(Path.join(@home, "bin/minizinc"), ["--solver", "org.minizinc.mzn-fzn", "-c", "--fzn", fzn, "--ozn", ozn, model, dzn], env: env, stderr_to_stdout: true)
+      {dump, 0} = System.cmd(frontend, ["--dump", fzn], stderr_to_stdout: false)
       File.write!(cp, dump)
       slang_search(cp, fzn, work, limit_s)
     end)

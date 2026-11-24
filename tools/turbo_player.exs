@@ -10,7 +10,7 @@
 # For that engine the gate is the GPU only, minus this process's own recent share.
 # Usage: elixir tools/turbo_player.exs <level.cp> [--slice NODES] [--max-load L] [--max-gpu PERCENT] [--poll-ms MS] [--max-slices N] [--checkpoint FILE]
 #   the level is the file's base name: scout, party or saga (the enumeration `level` of the domain).
-# --fzn FILE (the level's FlatZinc) with --printer (the cp_dump binary, default turbo-runs/cp_dump) writes the solution in MiniZinc format to solution.mzn in the scratch folder at the end.
+# --fzn FILE (the level's FlatZinc) with --printer (the frontier_frontend binary, default .lake/build/bin/frontier_frontend: Lean port of Turbo's preprocessing and solver output) writes the solution in MiniZinc format to solution.mzn in the scratch folder at the end.
 # Time is the entity packet's hybrid logical clock (48 bits of milliseconds, 16 of counter): commands to the GPU host carry the player's stamp, replies carry the host's, and with TURBO_TRACE=FILE
 # each slice appends "slice HLC PLAN_MS RUN_MS" to the host's launch lines, so tools/turbo_profile.exs can order them and split planner time from GPU time.
 # Free means the one-minute load average is under --max-load (default 4, the host has 8 threads) and the GPU is under --max-gpu percent busy (default 30).
@@ -191,9 +191,9 @@ run_slice = if gpu?, do: run_gpu_slice, else: run_cpu_slice
 
 print_solution = fn ->
   fzn = Keyword.get(opts, :fzn)
-  printer = Keyword.get(opts, :printer, "/mnt/fire/6-datasource/turbo-runs/cp_dump")
+  printer = Keyword.get(opts, :printer, Path.join(root, ".lake/build/bin/frontier_frontend"))
   if fzn != nil do
-    {out, 0} = System.cmd("nice", ["-n", "19", printer, "-arch", "barebones", "-or", "1", "-sub", "0", fzn], env: [{"TURBO_BEST", Path.join(scratch, "result.txt")}])
+    {out, 0} = System.cmd("nice", ["-n", "19", printer, "--solution", fzn, Path.join(scratch, "result.txt")])
     File.write!(Path.join(scratch, "solution.mzn"), out)
     IO.puts("solution in #{Path.join(scratch, "solution.mzn")}")
   end
