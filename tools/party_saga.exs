@@ -63,9 +63,16 @@ defmodule Saga do
   end
 
   def mzn, do: Path.join(@root, "party-saga.mzn")
+  # Turbo (GPU) takes its soft limit as -timeout (the hard -t can hang) and needs its solver file; its fixed cost is seconds.
+  def limit_args("turbo" <> _, limit_s), do: ["-timeout", Integer.to_string(max(limit_s, 30) * 1000)]
+  def limit_args(_, limit_s), do: ["-t", Integer.to_string(limit_s * 1000)]
+  def solver_env("turbo" <> _), do: [{"MZN_SOLVER_PATH", Path.join(System.get_env("TURBO_HOME", "/mnt/fire/6-datasource/turbo-build"), "msc")}]
+  def solver_env(_), do: []
+  def agree_solvers, do: ~w(chuffed gecode) ++ if(System.get_env("TURBO_HOME"), do: ["turbo.gpu.release"], else: [])
   def run(solver, model, dzn, limit_s) do
-    args = ["--solver", solver, "-t", Integer.to_string(limit_s * 1000), model, dzn]
-    {us, {out, _}} = :timer.tc(fn -> System.cmd(Path.join(@home, "bin/minizinc"), args, env: [{"LD_LIBRARY_PATH", Path.join(@home, "lib")}], stderr_to_stdout: true) end)
+    args = ["--solver", solver] ++ limit_args(solver, limit_s) ++ [model, dzn]
+    env = [{"LD_LIBRARY_PATH", Path.join(@home, "lib")}] ++ solver_env(solver)
+    {us, {out, _}} = :timer.tc(fn -> System.cmd(Path.join(@home, "bin/minizinc"), args, env: env, stderr_to_stdout: true) end)
     status = cond do
       String.contains?(out, "=====UNSATISFIABLE=====") -> :unsat
       String.contains?(out, "==========") -> :optimal
@@ -397,7 +404,7 @@ defmodule Saga.Cli do
     out =
       for r <- rows do
         w = Saga.Gen.level(r["track"], r["g"], r["h"], r["seed"] || 1)
-        others = for sv <- ~w(chuffed gecode), do: {sv, solve_world(w, sv, limit)}
+        others = for sv <- Saga.agree_solvers(), do: {sv, solve_world(w, sv, limit)}
         verdicts = for {sv, o} <- others, do: {sv, o.status, o.objective}
         ok = Enum.all?(verdicts, fn {_, st, ob} -> st != :optimal or ob == r["objective"] end)
         proved = Enum.count(verdicts, fn {_, st, _} -> st == :optimal end)
