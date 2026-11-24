@@ -28,7 +28,7 @@ level_value = %{"scout" => 1, "party" => 2, "saga" => 3} |> Map.fetch!(level)
 store_bin = Path.join(root, ".lake/build/bin/frontier_store")
 {scratch, gpu_files} =
   if gpu? do
-    {out, 0} = System.cmd("elixir", [Path.join(root, "tools/turbo_gpu.exs"), cp_path, "--prepare", "--blocks", Integer.to_string(Keyword.get(opts, :blocks, 256)), "--power", Integer.to_string(Keyword.get(opts, :power, 13))], env: [{"ELIXIR_ERL_OPTIONS", "+fnu"}])
+    {out, 0} = System.cmd("elixir", [Path.join(root, "tools/turbo_gpu.exs"), cp_path, "--prepare", "--blocks", Integer.to_string(Keyword.get(opts, :blocks, 64)), "--power", Integer.to_string(Keyword.get(opts, :power, 0))], env: [{"ELIXIR_ERL_OPTIONS", "+fnu"}])
     [cubin, host, dir] = out |> String.split("\n", trim: true) |> Enum.take(-3)
     {dir, {cubin, host, Path.join(dir, "input.txt")}}
   else
@@ -165,7 +165,7 @@ gpu_port = fn ->
       {cubin, host, input} = gpu_files
       env = [{~c"TURBO_SERVE", ~c"1"}, {~c"TURBO_GPU_DUTY", ~c"#{Keyword.get(opts, :duty, 25.0)}"}]
       port = Port.open({:spawn_executable, host}, [:binary, :exit_status, :stderr_to_stdout, {:line, 4096}, {:env, env},
-        {:args, [cubin, input, Integer.to_string(Keyword.get(opts, :blocks, 256)), Integer.to_string(Keyword.get(opts, :gpu_slice, 1))]}])
+        {:args, [cubin, input, Integer.to_string(Keyword.get(opts, :blocks, 64)), Integer.to_string(Keyword.get(opts, :gpu_slice, 1))]}])
       if File.exists?(checkpoint) and not done?.(), do: IO.puts("  " <> Enum.join(gpu_reply.(port, "load " <> checkpoint), " / "))
       Agent.update(gpu_state, &%{&1 | port: port})
       port

@@ -112,7 +112,7 @@ int main(int argc, char** argv) {
         bool done = false;
     int last_approx = INT_MAX;
     // Between launches no block is running, so work can move between blocks with plain copies. Every launch the same exchange runs: each block that has finished takes the
-    // shallowest decision of a busy block whose second child is still unexplored; the busy block gets that child emptied (its next try fails at once), the idle block starts
+    // deepest open decision of the busy block that has the deepest one (a decision whose second child is still unexplored); the busy block gets that child emptied (its next try fails at once), the idle block starts
     // from the busy block's snapshot with the decisions on the path to it applied. With no idle block, or no open decision, nothing moves.
     // Everything in a block's store counts as changed: its list of changed variables is written as data (every variable, flag set), so the kernel needs no flag for it.
     std::vector<int> iota_vars(n), ones_vars(n, 1);
@@ -136,13 +136,14 @@ int main(int argc, char** argv) {
                 cache[v].resize((size_t)state[v * STATE + 0] * 8);
                 cuMemcpyDtoH(cache[v].data(), d_dec + (size_t)v * dec_ints * sizeof(int), cache[v].size() * sizeof(int));
             }
-            for (int i = 0; i < state[v * STATE + 0]; ++i) if (cache[v][i * 8 + 1] == 0 && cache[v][i * 8 + 4] <= cache[v][i * 8 + 5]) return i;
+            // the deepest decision whose second child is still unexplored: the work the busy block would reach last, so the least disturbed one to give away
+            for (int i = state[v * STATE + 0] - 1; i >= 0; --i) if (cache[v][i * 8 + 1] == 0 && cache[v][i * 8 + 4] <= cache[v][i * 8 + 5]) return i;
             return -1;
         };
         std::vector<int> lo(n), hi(n);
         for (int thief : idle) {
-            int victim = -1, at = INT_MAX;
-            for (int v = 0; v < blocks; ++v) { int i = open_depth(v); if (i >= 0 && i < at) { at = i; victim = v; } }
+            int victim = -1, at = -1;
+            for (int v = 0; v < blocks; ++v) { int i = open_depth(v); if (i > at) { at = i; victim = v; } }
             if (victim < 0) break;
             std::vector<int>& dec = cache[victim];
             cuMemcpyDtoH(lo.data(), d_sl + (size_t)victim * n * sizeof(int), n * sizeof(int));

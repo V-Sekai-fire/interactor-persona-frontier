@@ -139,3 +139,20 @@ The game on this machine is real time and the host has 8 threads, so the solver 
 
 ## Many blocks give the same answer (2026-11-24, mission item 1)
 `tools/turbo_blocks_check.exs` solves generated Party Saga worlds (track scout, sizes 1 and 2, seeds 1 to 25, compiled with MiniZinc's own library and dumped by `frontier_frontend`) on one GPU block, on 8 blocks (8 subproblems) and on 256 blocks (256 subproblems), and requires that every run ends, that every block reports an exhaustive search (`exhaustive blocks N of N`, new in the host's report) and that the best objective is the one block's. Result: 50 of 50 worlds. Size 1 worlds are too small to move work (29 to 51 nodes, 0 handoffs); all 25 size 2 worlds moved work on 8 blocks (1,023 handoffs in all) and on 256 blocks (3,050), the largest with 19,791 nodes on one block, 21,466 on 8 and 22,954 on 256. Before this the handoff path rested on three matching optima (scout, party, saga). `tools/turbo_solve.exs --input-only` writes the solver input without building the CPU solver, so a world costs seconds. Local only: it needs the GPU.
+
+## One handoff rule and one default for many blocks (2026-11-24, mission item 2)
+Saga on 256 blocks did about 100 times the nodes of one block and was no faster, so the handoff rule, the up-front split, the nodes per launch and the block count were measured (GPU launch time = launches times the mean launch, duty 50; one block: party 616 s, saga 30 s):
+
+| setting | party | saga |
+|---|---|---|
+| 256 blocks, 8,192 subproblems, shallowest open decision (the merged rule) | 1.4 s, 1,088,155 nodes | 26.5 s, 1,094,713 nodes |
+| same, deepest open decision | 1.5 s | 23.3 s, 1,052,937 |
+| 256 blocks, no split, shallowest | 1.5 s, 1,068,063 | 22.4 s, 1,010,203 |
+| 256 blocks, no split, deepest | 1.5 s, 1,073,841 | 16.4 s, 945,995 |
+| same, 5 or 15 nodes per launch | 2.4 s and 1.8 s | 43.6 s and 40.0 s |
+| no split, deepest, 16 blocks | 12.3 s, 1,061,171 | 11.6 s, 84,749 |
+| 32 blocks | 6.1 s, 1,064,342 | 11.2 s, 153,702 |
+| **64 blocks (the default)** | **3.5 s, 1,064,629** | **13.2 s, 292,370** |
+| 128 blocks | 1.9 s, 1,067,657 | 13.8 s, 535,024 |
+
+Findings. The handoff rule and the split are small effects (the deepest open decision is a little better on saga and level on party; with no split the blocks are fed by handoffs only, so the start needs no parameter). The large effect is the block count on saga: it is a chain of 35 improving solutions on one deep path, so extra blocks do speculative work with no bound (16 blocks do 8 times the nodes of one block and are 2.6 times as fast; 256 blocks do 90 times and are 1.8 times as fast), while party has parallel width and keeps gaining up to 256. No count is best for both, so the default is 64: party in 3.5 s (about 175 times as fast as one block and 270 times Turbo's 953 s), saga in 13.2 s (2.3 times as fast as one block, 8.5 times Turbo's 113 s). Fewer nodes per launch only add handoffs. The code has one rule (the deepest open decision of the block that has the deepest one; the experiment switch is gone), the default is 64 blocks and `--power 0` in `tools/turbo_gpu.exs` and `tools/turbo_player.exs`, and `--blocks` and `--power` stay as data. `tools/turbo_blocks_check.exs` with the new rule and default: 50 of 50 generated worlds give the one-block optimum on 8 and on 64 blocks, every block exhaustive, 1,412 handoffs on 8 blocks and 2,746 on 64 in the 25 size 2 worlds.

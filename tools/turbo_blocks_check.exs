@@ -3,7 +3,7 @@
 # SPDX-FileCopyrightText: 2021 Pierre Talbot, Frédéric Pinel
 # SPDX-License-Identifier: Apache-2.0 AND MIT
 # Is the search on many GPU blocks, with work moving between blocks, still the same search? Small generated Party Saga worlds are solved on one block, on 8 and
-# on 256; every run must end, every block must say its search was exhaustive, and the best objective must be the one block's. Local only (it needs the GPU).
+# on 64; every run must end, every block must say its search was exhaustive, and the best objective must be the one block's. Local only (it needs the GPU).
 # Usage: elixir tools/turbo_blocks_check.exs [--worlds 25] [--sizes 1,2]   (worlds per size; seeds 1..worlds)
 {opts, [], _} = OptionParser.parse(System.argv(), strict: [worlds: :integer, sizes: :string])
 root = File.cwd!()
@@ -43,11 +43,11 @@ sizes = opts |> Keyword.get(:sizes, "1,2") |> String.split(",") |> Enum.map(&Str
 results =
   for size <- sizes, seed <- 1..Keyword.get(opts, :worlds, 25) do
     cp = dump.(size, seed)
-    [one, eight, many] = for {blocks, power} <- [{1, 0}, {8, 3}, {256, 8}], do: solve.(cp, blocks, power)
+    [one, eight, many] = for {blocks, power} <- [{1, 0}, {8, 0}, {64, 0}], do: solve.(cp, blocks, power)
     same = Enum.all?([one, eight, many], &(&1.done and &1.exhaustive)) and eight.objective == one.objective and many.objective == one.objective
     IO.puts("#{if same, do: "ok  ", else: "FAIL"} size #{size} seed #{seed}: objective #{inspect(one.objective)} / #{inspect(eight.objective)} / #{inspect(many.objective)}" <>
             "  nodes #{one.nodes} / #{eight.nodes} / #{many.nodes}  handoffs #{eight.handoffs} / #{many.handoffs}")
     same
   end
-IO.puts("blocks check: #{Enum.count(results, & &1)} of #{length(results)} worlds give the one-block optimum on 8 and on 256 blocks")
+IO.puts("blocks check: #{Enum.count(results, & &1)} of #{length(results)} worlds give the one-block optimum on 8 and on 64 blocks")
 if not Enum.all?(results), do: System.halt(1)
