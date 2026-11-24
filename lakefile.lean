@@ -99,7 +99,7 @@ lean_exe «frontier_packets» where
 -- The Turbo propagator written in Lean and printed as Slang with contract-lean-slang.
 lean_lib «Turbo» where
   srcDir := "turbo"
-  roots := #[`Turbo.Pir, `Turbo.Fixpoint, `Turbo.Solve]
+  roots := #[`Turbo.Pir, `Turbo.Fixpoint, `Turbo.Solve, `Turbo.Coop]
 lean_exe «turbo_emit» where
   srcDir := "turbo"
   root := `EmitMain

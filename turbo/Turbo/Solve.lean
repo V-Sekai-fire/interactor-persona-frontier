@@ -118,7 +118,8 @@ def blockBase : E := mul (v "b") vars
 def zeroBase : E := n 0
 
 /-- The propagation step of `propagate` in the source: fixpoint, then solution test. -/
-def propagateFn : SlangFunctionDecl :=
+-- With `atomic`, the shared bound is lowered with `InterlockedMin`, for blocks that run at the same time on a GPU; the cpp target has no buffer atomics.
+def propagateFn (atomic : Bool) : SlangFunctionDecl :=
   { name := "propagate", params := [param "b" int],
     body := [
       setState sLeaf (n 0),
@@ -136,7 +137,7 @@ def propagateFn : SlangFunctionDecl :=
               [.declInit int "bound" (cell "lower" (ctl cObjective)),
                when (gt (stateAt sBestBound) (v "bound"))
                  [setState sBestBound (v "bound"),
-                  .assign (ctl cApproxBest) (mn (ctl cApproxBest) (v "bound")),
+                  (if atomic then .expr (call "InterlockedMin" [ctl cApproxBest, v "bound"]) else .assign (ctl cApproxBest) (mn (ctl cApproxBest) (v "bound"))),
                   copyStore "lower" "upper" "best_lower" "best_upper" blockBase blockBase,
                   bump sSolutions]]
               [copyStore "lower" "upper" "best_lower" "best_upper" blockBase blockBase, bump sSolutions, .assign (ctl cStop) (n 1)]]]
@@ -330,12 +331,12 @@ def cancelCheck : S :=
   when (ne (ctl cCancel) (n 0)) [.assign (ctl cCancel) (n 0), setState sInner (n 0), setState sLeaf (n 1), setState sRemaining (n 0), setState sPhase (n phaseNext)]
 
 /-- One iteration of the dive, or the end of it: sections D and E of the source. -/
-def diveIteration : List S :=
+def diveIteration (atomic : Bool) : List S :=
   [cancelCheck, .ifThen (land (land (gt (stateAt sRemaining) (n 0)) (eq (stateAt sLeaf) (n 0))) (eq (stateAt sStop) (n 0)))
      (diveStep ++ [sliceCheck])
      [.ifThen (land (eq (stateAt sLeaf) (n 1)) (eq (stateAt sStop) (n 0)))
         [.declInit int "skip_to" (bin "<<" (add (bin ">>" (stateAt sSubproblem) (stateAt sRemaining)) (n 1)) (stateAt sRemaining)),
-         .assign (ctl cNextSubproblem) (mx (ctl cNextSubproblem) (v "skip_to")), setState sPhase (n phaseNext)]
+         (if atomic then .expr (call "InterlockedMax" [ctl cNextSubproblem, v "skip_to"]) else .assign (ctl cNextSubproblem) (mx (ctl cNextSubproblem) (v "skip_to"))), setState sPhase (n phaseNext)]
         [.ifThen (eq (stateAt sStop) (n 0))
            [when (ne (ctl cEps) (n 0)) [setState sStrategy (mx (n 1) (stateAt sStrategy)), setState sNextVar (n 0)],
             setState sInner (n 1), setState sPhase (n phaseSearch)]
@@ -347,16 +348,17 @@ def searchIteration : List S :=
      (solveStep ++ [sliceCheck])
      [setState sPhase (n phaseNext)]]
 
-def nextSubproblem : List S :=
+def nextSubproblem (atomic : Bool) : List S :=
   [.ifThen (eq (stateAt sStop) (n 0))
      [.ifThen (ne (ctl cExternal) (n 0))
         [setState sPhase (n phaseAwait)]
-        [setState sSubproblem (ctl cNextSubproblem), .assign (ctl cNextSubproblem) (add (ctl cNextSubproblem) (n 1)),
-         setState sPhase (n phaseStart)]]
+        (if atomic
+          then [.decl int "claimed", .expr (call "InterlockedAdd" [ctl cNextSubproblem, n 1, v "claimed"]), setState sSubproblem (v "claimed"), setState sPhase (n phaseStart)]
+          else [setState sSubproblem (ctl cNextSubproblem), .assign (ctl cNextSubproblem) (add (ctl cNextSubproblem) (n 1)), setState sPhase (n phaseStart)])]
      [setState sPhase (n phaseDone)]]
 
 /-- The block loop of the source as a state machine over `state[b][phase]`, so a slice can stop after any iteration and the next call resumes. -/
-def solveFn : SlangFunctionDecl :=
+def solveFn (atomic : Bool) : SlangFunctionDecl :=
   { attrs := [.shaderCompute, .numthreads 1 1 1], name := "solve", params := [⟨"tid", .vec .uint 3, .svDispatchThreadId, none, none, .qIn⟩],
     body := [
       .declInit int "b" (call "int" [.member (v "tid") "x"]),
@@ -366,14 +368,14 @@ def solveFn : SlangFunctionDecl :=
       setState sYield (n 0), setState sSliceStart (stateAt sNodes),
       .whileLoop (land (land (ne (stateAt sPhase) (n phaseDone)) (ne (stateAt sPhase) (n phaseAwait))) (eq (stateAt sYield) (n 0)))
         [when (eq (stateAt sPhase) (n phaseStart)) startSubproblem,
-         when (eq (stateAt sPhase) (n phaseDive)) diveIteration,
+         when (eq (stateAt sPhase) (n phaseDive)) (diveIteration atomic),
          when (eq (stateAt sPhase) (n phaseSearch)) searchIteration,
-         when (eq (stateAt sPhase) (n phaseNext)) nextSubproblem]] }
+         when (eq (stateAt sPhase) (n phaseNext)) (nextSubproblem atomic)]] }
 
-def solveModule : SlangShaderModule :=
+def solveModule (atomic : Bool := false) : SlangShaderModule :=
   { shaderModule with
     globals := globalBuffers,
     functions := shaderModule.functions ++
-      [embedB, loadB, deduceBytecodeB, askBytecodeB, propagateFn, pushDecision, splitStrategy, splitFn, childFn, currentChildFn, nextChildFn, solveFn] }
+      [embedB, loadB, deduceBytecodeB, askBytecodeB, propagateFn atomic, pushDecision, splitStrategy, splitFn, childFn, currentChildFn, nextChildFn, solveFn atomic] }
 
 end Turbo
