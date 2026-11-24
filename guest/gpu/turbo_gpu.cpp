@@ -41,8 +41,8 @@ struct Hlc {
 };
 
 struct Span { void* data; size_t count; };
-struct Globals { Span lower, upper, root_lower, root_upper, snap_lower, snap_upper, best_lower, best_upper, code, strategies, strategy_vars, decisions, state, control, active; };
-static const int STATE = 24;
+struct Globals { Span lower, upper, root_lower, root_upper, snap_lower, snap_upper, best_lower, best_upper, code, strategies, strategy_vars, decisions, state, control, var_start, var_props, dirty_flag, dirty_list, prop_mark, work_list, big_list; };
+static const int STATE = 32;
 
 template <class T> static CUdeviceptr upload(const std::vector<T>& v) {
     CUdeviceptr d = 0;
@@ -68,7 +68,15 @@ int main(int argc, char** argv) {
     for (auto& x : strategy_vars) if (fscanf(in, "%d", &x) != 1) return 2;
     fclose(in);
     size_t cells = (size_t)blocks * n;
-    std::vector<int> zeros_active((size_t)blocks * 2 * m, 0), zeros_cells(cells, 0), decisions((size_t)blocks * max_depth * 8, 0), state((size_t)blocks * STATE, 0), control(16, 0);
+    // which propagators watch each variable (every variable of a bytecode): the kernel re-runs only the propagators of variables that changed
+    std::vector<int> var_start(n + 1, 0), var_props;
+    for (int i = 0; i < m; ++i) for (int k = 1; k <= 3; ++k) var_start[code[4 * i + k] + 1]++;
+    for (int x = 0; x < n; ++x) var_start[x + 1] += var_start[x];
+    var_props.assign(var_start[n], 0);
+    { std::vector<int> fill(var_start.begin(), var_start.end() - 1);
+      for (int i = 0; i < m; ++i) for (int k = 1; k <= 3; ++k) var_props[fill[code[4 * i + k]]++] = i; }
+    std::vector<int> zeros_dirty(cells, 0), zeros_marks((size_t)blocks * m, 0);
+    std::vector<int> zeros_cells(cells, 0), decisions((size_t)blocks * max_depth * 8, 0), state((size_t)blocks * STATE, 0), control(16, 0);
     control[0] = m; control[1] = n; control[2] = ns; control[3] = objective; control[4] = power; control[5] = max_depth;
     control[6] = blocks; control[7] = h[7]; control[8] = h[8]; control[10] = blocks; control[11] = INT_MAX; control[13] = slice;
 
@@ -79,16 +87,16 @@ int main(int argc, char** argv) {
     CUfunction fn; CHECK(cuModuleGetFunction(&fn, mod, "solve"));
     CUdeviceptr gp; size_t gsize;
     CHECK(cuModuleGetGlobal(&gp, &gsize, mod, "SLANG_globalParams"));
-    // 224 bytes: fourteen buffers; 240 bytes: a fifteenth, the per-block list of active propagators.
-    if (gsize != sizeof(Globals) && gsize != sizeof(Globals) - sizeof(Span)) { fprintf(stderr, "global parameter block is %zu bytes, expected %zu or %zu\n", gsize, sizeof(Globals), sizeof(Globals) - sizeof(Span)); return 2; }
+    if (gsize != sizeof(Globals)) { fprintf(stderr, "global parameter block is %zu bytes, expected %zu\n", gsize, sizeof(Globals)); return 2; }
     CUdeviceptr d_lower = upload(zeros_cells), d_upper = upload(zeros_cells), d_rl = upload(root_lower), d_ru = upload(root_upper);
     CUdeviceptr d_sl = upload(zeros_cells), d_su = upload(zeros_cells), d_bl = upload(zeros_cells), d_bu = upload(zeros_cells);
-    CUdeviceptr d_active = upload(zeros_active);
+    CUdeviceptr d_vs = upload(var_start), d_vp = upload(var_props), d_df = upload(zeros_dirty), d_dl = upload(zeros_dirty), d_pm = upload(zeros_marks), d_wl = upload(zeros_marks), d_bg = upload(zeros_dirty);
     CUdeviceptr d_code = upload(code), d_str = upload(strategies), d_sv = upload(strategy_vars), d_dec = upload(decisions), d_state = upload(state), d_ctl = upload(control);
     if (!d_lower || !d_upper || !d_sl || !d_su || !d_bl || !d_bu || !d_dec) { fprintf(stderr, "out of device memory for %d blocks\n", blocks); return 2; }
     Globals g{{(void*)d_lower, cells}, {(void*)d_upper, cells}, {(void*)d_rl, (size_t)n}, {(void*)d_ru, (size_t)n}, {(void*)d_sl, cells}, {(void*)d_su, cells},
               {(void*)d_bl, cells}, {(void*)d_bu, cells}, {(void*)d_code, (size_t)m}, {(void*)d_str, (size_t)ns}, {(void*)d_sv, strategy_vars.size()},
-              {(void*)d_dec, decisions.size()}, {(void*)d_state, state.size()}, {(void*)d_ctl, control.size()}, {(void*)d_active, zeros_active.size()}};
+              {(void*)d_dec, decisions.size()}, {(void*)d_state, state.size()}, {(void*)d_ctl, control.size()},
+              {(void*)d_vs, var_start.size()}, {(void*)d_vp, var_props.size()}, {(void*)d_df, cells}, {(void*)d_dl, cells}, {(void*)d_pm, zeros_marks.size()}, {(void*)d_wl, zeros_marks.size()}, {(void*)d_bg, cells}};
     CHECK(cuMemcpyHtoD(gp, &g, gsize));
 
     using clk = std::chrono::steady_clock;
@@ -98,6 +106,8 @@ int main(int argc, char** argv) {
     auto start = clk::now();
     int launches = 0;
     double max_ms = 0, sum_ms = 0;
+    double deductions = 0, rounds = 0;
+    double prop_ticks = 0, launch_ticks = 0; // device clock ticks in propagation and in whole launches (kernel slots 25 and 26 of each block's state)
         bool done = false;
     int last_approx = INT_MAX;
     auto step = [&](int max_this_call) -> int {
@@ -109,6 +119,7 @@ int main(int argc, char** argv) {
             launches++; did++; sum_ms += ms; if (ms > max_ms) max_ms = ms;
             unsigned long long stamp = hlc.send();
             cuMemcpyDtoH(state.data(), d_state, state.size() * sizeof(int));
+            for (int b = 0; b < blocks; ++b) { prop_ticks += (unsigned)state[b * STATE + 25]; launch_ticks += (unsigned)state[b * STATE + 26]; deductions += state[b * STATE + 30]; rounds += state[b * STATE + 31]; }
             done = true;
             int finished = 0;
             long total_nodes = 0;
@@ -147,7 +158,12 @@ int main(int argc, char** argv) {
         copy(d_lower, cells); copy(d_upper, cells); copy(d_sl, cells); copy(d_su, cells); copy(d_bl, cells); copy(d_bu, cells);
         copy(d_dec, decisions.size()); copy(d_state, state.size()); copy(d_ctl, control.size());
         fclose(f);
-        if (!writing) { cuMemcpyDtoH(state.data(), d_state, state.size() * sizeof(int)); }
+        if (!writing) {
+            cuMemcpyDtoH(state.data(), d_state, state.size() * sizeof(int));
+            // the lists of changed variables are not in the file: the next launch propagates everything once (state slot 29 of each block)
+            for (int b = 0; b < blocks; ++b) state[b * STATE + 29] = 1;
+            cuMemcpyHtoD(d_state, state.data(), state.size() * sizeof(int));
+        }
         return ok;
     };
     if (getenv("TURBO_SERVE")) {
@@ -170,6 +186,9 @@ int main(int argc, char** argv) {
     }
     double wall = std::chrono::duration<double, std::milli>(clk::now() - start).count();
     CHECK(cuMemcpyDtoH(control.data(), d_ctl, control.size() * sizeof(int)));
+    printf("gpu launches %d wall %.1f ms mean %.3f ms max %.3f ms\n", launches, wall, sum_ms / std::max(launches, 1), max_ms);
+    if (rounds > 0) printf("propagation rounds %.0f, propagators run %.0f (%.1f per round)\n", rounds, deductions, deductions / rounds);
+    if (launch_ticks > 0) printf("kernel clock: propagation %.1f percent of the launch (%.0f of %.0f ticks, in sixteenths)\n", 100.0 * prop_ticks / launch_ticks, prop_ticks, launch_ticks);
     if (!done) {
         printf("status running after %d launches\n", launches);
         std::vector<std::pair<int, int>> order;
@@ -184,7 +203,6 @@ int main(int argc, char** argv) {
     long nodes = 0;
     for (int b = 0; b < blocks; ++b) nodes += state[b * STATE + 7];
     printf("status done nodes %ld\n", nodes);
-    printf("gpu launches %d wall %.1f ms mean %.3f ms max %.3f ms\n", launches, wall, sum_ms / launches, max_ms);
     printf("error %d approx %d next %d\n", control[12], control[11], control[10]);
     int best = -1;
     for (int b = 0; b < blocks; ++b) {

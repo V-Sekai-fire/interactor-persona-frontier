@@ -13,15 +13,47 @@ open LeanSlang
 
 def sNewBest := 20
 def sFound := 21
+/-- State slot 28: how many entries of the block's list of changed variables are valid. State slot 29: when non-zero, the next launch treats every variable as changed (a loaded checkpoint does not carry the lists). -/
+def sDirtyN := 28
+def sResync := 29
 def lanes : E := n 256
 def tidE : E := v "tid"
 def sync : S := .expr (call "AllMemoryBarrierWithGroupSync" [])
 def leader (body : List S) : S := when (eq tidE (n 0)) body
+/-- The device clock, truncated to 32 bits (a difference of two readings is right while it stays under 2^32 ticks). -/
+def clockNow : E := call "int" [call "getRealtimeClockLow" []]
+/-- Profile slots of the per-block state: 24 start of the timed region, 25 ticks (in sixteenths) spent in propagation during this launch, 26 ticks of the whole launch, 27 start of the launch. -/
+def profStart : S := leader [setState 24 clockNow]
+def profEnd : S := leader [setState 25 (add (stateAt 25) (bin ">>" (bin "-" clockNow (stateAt 24)) (n 4)))]
 def shared (name : String) : E := v name
 /-- `for (i = tid + start; i < bound; i += 256) body`, in its own scope. -/
 def strided (i : String) (start bound : E) (body : List S) : S :=
   .ifThen (.litBool true)
     [.declInit int i (add start tidE), .whileLoop (lt (v i) bound) (body ++ [.assign (v i) (add (v i) lanes)])] []
+
+def dirtyFlagAt (x : E) : E := .index (v "dirty_flag") (add blockBase x)
+def dirtyListAt (i : E) : E := .index (v "dirty_list") (add blockBase i)
+def propMarkAt (p : E) : E := .index (v "prop_mark") (add (mul (v "b") (ctl cBytecodes)) p)
+def workListAt (i : E) : E := .index (v "work_list") (add (mul (v "b") (ctl cBytecodes)) i)
+def bigListAt (i : E) : E := .index (v "big_list") (add blockBase i)
+def bigDegree : Nat := 48
+/-- Queue propagator `p` for this round unless it already is: the mark is set by the first thread to ask. -/
+def queueProp (p : E) : List S :=
+  [.declInit int "q_prop" p, .declInit int "was_marked" (n 0),
+   .expr (call "InterlockedExchange" [propMarkAt (v "q_prop"), n 1, v "was_marked"]),
+   when (eq (v "was_marked") (n 0))
+     [.declInit int "work_slot" (n 0), .expr (call "InterlockedAdd" [shared "s_nw", n 1, v "work_slot"]), .assign (workListAt (v "work_slot")) (v "q_prop")]]
+/-- A variable changed: put it on the block's list of changed variables once (the flag says whether it is already there). -/
+def markDirty (x : E) : List S :=
+  [.declInit int "was_dirty" (n 0), .expr (call "InterlockedExchange" [dirtyFlagAt x, n 1, v "was_dirty"]),
+   when (eq (v "was_dirty") (n 0))
+     [.declInit int "dirty_slot" (n 0), .expr (call "InterlockedAdd" [stateAt sDirtyN, n 1, v "dirty_slot"]), .assign (dirtyListAt (v "dirty_slot")) x]]
+/-- Every variable changed: after a subproblem root is loaded, or a checkpoint. All threads. -/
+def markAllDirty : List S :=
+  [strided "k" (n 0) vars [.assign (dirtyFlagAt (v "k")) (n 1), .assign (dirtyListAt (v "k")) (v "k")],
+   sync,
+   leader [setState sDirtyN vars],
+   sync]
 
 def embedA : SlangFunctionDecl :=
   { retType := bool, name := "embed_a", params := [param "b" int, param "x" int, param "r" itv],
@@ -35,6 +67,7 @@ def embedA : SlangFunctionDecl :=
       .declInit int "new_lower" (mx (v "old_lower") (lower (v "r"))), .declInit int "new_upper" (mn (v "old_upper") (upper (v "r"))),
       .declInit bool "changed" (lor (ne (v "new_lower") (v "old_lower")) (ne (v "new_upper") (v "old_upper"))),
       when (land (v "changed") (call "itv_is_bot" [mk (v "new_lower") (v "new_upper")])) [setState sBot (n 1)],
+      when (v "changed") (markDirty (v "x")),
       ret (v "changed")] }
 
 def deduceBytecodeA : SlangFunctionDecl :=
@@ -57,16 +90,49 @@ def params2 : List SlangBinding := [param "b" int, param "tid" int]
 def propagateCoop : SlangFunctionDecl :=
   { name := "propagate_coop", params := params2,
     body := [
-      leader [setState sLeaf (n 0), .assign (shared "s_changed") (n 1)],
+      leader [setState sLeaf (n 0)],
       sync,
-      .declInit int "again" (n 1),
+      .declInit int "again" (pick (ne (stateAt sDirtyN) (n 0)) (n 1) (n 0)),
       .whileLoop (ne (v "again") (n 0))
-        [leader [.assign (shared "s_changed") (n 0)],
+        [.declInit int "dirty_count" (stateAt sDirtyN),
          sync,
-         strided "i" (n 0) (ctl cBytecodes) [when (call "deduce_bytecode_a" [v "b", uintOf (v "i")]) [.assign (shared "s_changed") (n 1)]],
+         leader [.assign (shared "s_nw") (n 0), .assign (shared "s_nbig") (n 0)],
          sync,
-         .assign (v "again") (pick (land (ne (shared "s_changed") (n 0)) (eq (stateAt sBot) (n 0))) (n 1) (n 0)),
+         -- the propagators of every changed variable, each once: a variable with few watchers is walked by one thread, one with many by the whole block
+         strided "i" (n 0) (v "dirty_count")
+           [.declInit int "x" (dirtyListAt (v "i")),
+            .assign (dirtyFlagAt (v "x")) (n 0),
+            .declInit int "k" (.index (v "var_start") (v "x")),
+            .declInit int "stop" (.index (v "var_start") (add (v "x") (n 1))),
+            .ifThen (gt (sub (v "stop") (v "k")) (n bigDegree))
+              [.declInit int "big_slot" (n 0), .expr (call "InterlockedAdd" [shared "s_nbig", n 1, v "big_slot"]), .assign (bigListAt (v "big_slot")) (v "x")]
+              [.whileLoop (lt (v "k") (v "stop")) (queueProp (.index (v "var_props") (v "k")) ++ [.assign (v "k") (add (v "k") (n 1))])]],
+         sync,
+         .declInit int "big_count" (shared "s_nbig"),
+         .declInit int "bj" (n 0),
+         .whileLoop (lt (v "bj") (v "big_count"))
+           [.declInit int "bx" (bigListAt (v "bj")),
+            strided "bk" (.index (v "var_start") (v "bx")) (.index (v "var_start") (add (v "bx") (n 1))) (queueProp (.index (v "var_props") (v "bk"))),
+            .assign (v "bj") (add (v "bj") (n 1))],
+         sync,
+         .declInit int "work_count" (shared "s_nw"),
+         leader [setState sDirtyN (n 0), setState 30 (add (stateAt 30) (v "work_count")), setState 31 (add (stateAt 31) (n 1))],
+         sync,
+         strided "j" (n 0) (v "work_count")
+           [.declInit int "q" (workListAt (v "j")),
+            .assign (propMarkAt (v "q")) (n 0),
+            .expr (call "deduce_bytecode_a" [v "b", uintOf (v "q")])],
+         sync,
+         .assign (v "again") (pick (land (ne (stateAt sDirtyN) (n 0)) (eq (stateAt sBot) (n 0))) (n 1) (n 0)),
          sync],
+      -- a failure leaves changed variables on the list: clear them, the store is restored before the next propagation
+      .ifThen (ne (stateAt sDirtyN) (n 0))
+        [.declInit int "left_over" (stateAt sDirtyN),
+         sync,
+         strided "i" (n 0) (v "left_over") [.assign (dirtyFlagAt (dirtyListAt (v "i"))) (n 0)],
+         sync,
+         leader [setState sDirtyN (n 0)],
+         sync] [],
       leader [.assign (shared "s_flag") (n 0)],
       sync,
       when (eq (stateAt sBot) (n 0))
@@ -179,7 +245,7 @@ def searchIterationCoop : List S :=
   [.ifThen (land (ne (stateAt sInner) (n 0)) (eq (stateAt sStop) (n 0)))
      ([leader objectiveStepA, sync,
        when (eq (stateAt sStop) (n 0))
-         [.expr (call "propagate_coop" [v "b", tidE]),
+         [profStart, .expr (call "propagate_coop" [v "b", tidE]), profEnd,
           when (eq (stateAt sLeaf) (n 0))
             [when (eq decDepth (n 0))
                [copyCoop "lower" "upper" "snap_lower" "snap_upper" blockBase blockBase,
@@ -199,7 +265,7 @@ def searchIterationCoop : List S :=
 
 def diveIterationCoop (atomic : Bool) : List S :=
   [.ifThen (land (land (gt (stateAt sRemaining) (n 0)) (eq (stateAt sLeaf) (n 0))) (eq (stateAt sStop) (n 0)))
-     [.expr (call "propagate_coop" [v "b", tidE]),
+     [profStart, .expr (call "propagate_coop" [v "b", tidE]), profEnd,
       when (eq (stateAt sLeaf) (n 0))
         [.expr (call "split_coop" [v "b", tidE]),
          leader [.ifThen (ne (stateAt sFound) (n 0))
@@ -219,15 +285,14 @@ def diveIterationCoop (atomic : Bool) : List S :=
            [setState sPhase (n phaseDone)]]],
       sync]]
 
-def startSubproblemCoop : List S :=
-  [.ifThen (ge (stateAt sSubproblem) (v "num_subproblems"))
-     [leader [setState sPhase (n phaseDone)], sync]
-     [copyCoop "root_lower" "root_upper" "lower" "upper" zeroBase blockBase,
-      sync,
-      leader [setState sStrategy (n 0), setState sNextVar (n 0), setState sDepth (n 0), setState sBot (n 0),
-              setState sRemaining (ctl cPower), setState sLeaf (n 0), setState sPhase (n phaseDive)],
-      sync]]
+def startSubproblemBody : List S :=
+  [copyCoop "root_lower" "root_upper" "lower" "upper" zeroBase blockBase, sync] ++ markAllDirty ++
+  [leader [setState sStrategy (n 0), setState sNextVar (n 0), setState sDepth (n 0), setState sBot (n 0),
+           setState sRemaining (ctl cPower), setState sLeaf (n 0), setState sPhase (n phaseDive)],
+   sync]
 
+def startSubproblemCoop : List S :=
+  [.ifThen (ge (stateAt sSubproblem) (v "num_subproblems")) [leader [setState sPhase (n phaseDone)], sync] startSubproblemBody]
 def nextSubproblemCoop : List S :=
   [leader (nextSubproblem true), sync]
 
@@ -242,20 +307,28 @@ def solveCoopFn : SlangFunctionDecl :=
       leader [when (eq (stateAt sPhase) (n 0)) initBlock],
       sync,
       .declInit int "num_subproblems" (bin "<<" (n 1) (ctl cPower)),
-      leader [setState sYield (n 0), setState sSliceStart (stateAt sNodes)],
+      leader [setState sYield (n 0), setState sSliceStart (stateAt sNodes), setState 25 (n 0), setState 26 (n 0), setState 27 clockNow, setState 30 (n 0), setState 31 (n 0)],
       sync,
+      .ifThen (ne (stateAt sResync) (n 0)) (markAllDirty ++ [leader [setState sResync (n 0)], sync]) [],
       .whileLoop (land (land (ne (stateAt sPhase) (n phaseDone)) (ne (stateAt sPhase) (n phaseAwait))) (eq (stateAt sYield) (n 0)))
         [when (eq (stateAt sPhase) (n phaseStart)) startSubproblemCoop,
          when (eq (stateAt sPhase) (n phaseDive)) (diveIterationCoop true),
          when (eq (stateAt sPhase) (n phaseSearch)) searchIterationCoop,
-         when (eq (stateAt sPhase) (n phaseNext)) nextSubproblemCoop]] }
+         when (eq (stateAt sPhase) (n phaseNext)) nextSubproblemCoop],
+      sync,
+      leader [setState 26 (bin ">>" (bin "-" clockNow (stateAt 27)) (n 4))]] }
+
+/-- Which propagators watch each variable (read only), and per block: the list of changed variables with its flags, the marks of the propagators queued, and the queue. -/
+def incrementalBuffers : List SlangBinding :=
+  [global "var_start" (.roBuf int) 14, global "var_props" (.roBuf int) 15, global "dirty_flag" (.rwBuf int) 16, global "dirty_list" (.rwBuf int) 17,
+   global "prop_mark" (.rwBuf int) 18, global "work_list" (.rwBuf int) 19, global "big_list" (.rwBuf int) 20]
 
 def coopShared : List SlangGroupSharedDecl :=
-  ["s_changed", "s_flag", "s_idx", "s_key", "s_have", "s_pick"].map fun name => { name, elemType := int }
+  ["s_changed", "s_flag", "s_idx", "s_key", "s_have", "s_pick", "s_nw", "s_nbig"].map fun name => { name, elemType := int }
 
 def solveCoopModule : SlangShaderModule :=
   { shaderModule with
-    globals := globalBuffers,
+    globals := globalBuffers ++ incrementalBuffers,
     groupShared := coopShared,
     functions := shaderModule.functions ++
       [embedB, loadB, askBytecodeB, pushDecision, childFn, currentChildFn, nextChildFn,

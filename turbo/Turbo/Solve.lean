@@ -60,7 +60,7 @@ def phaseDone := 5
 def phaseAwait := 6
 
 def ctl (k : Nat) : E := .index (v "control") (.litUint k)
-def stateAt (k : Nat) : E := .index (v "state") (add (mul (v "b") (n 24)) (n k))
+def stateAt (k : Nat) : E := .index (v "state") (add (mul (v "b") (n 32)) (n k))
 def setState (k : Nat) (e : E) : S := .assign (stateAt k) e
 def bump (k : Nat) : S := setState k (add (stateAt k) (n 1))
 def vars : E := ctl cVariables
