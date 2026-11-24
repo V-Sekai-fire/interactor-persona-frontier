@@ -68,3 +68,14 @@ variables unbounded except for the division operators (Turbo itself divides by z
 and meets each result with the input box as Turbo's store does. Result: reference vs hand 5,400 of 5,400, reference vs Lean 5,400 of 5,400, hand vs Lean 5,400 of 5,400.
 It found one real fault, fixed: Turbo's macros read `r1` live, so `EMOD` sets `r1.ub() = xl` with the new lower bound. `deduce` now changes `r1`, `r2`, `r3` in place like the source.
 Not covered: `FDIV` and `CDIV` (no FlatZinc name reaches them), one-sided unbounds, the division operators with unbounded variables, `ask` (only `deduce` is compared), many-step fixpoints.
+## P2 format and kernel (2026-11-24)
+Format: store `lower[v]`, `upper[v]` (`int`), bytecodes `code[i] = (op, x, y, z)` meaning `x = y op z` with the operator codes of `turbo/Turbo/Pir.lean`, `control[0]` the bytecode count.
+`turbo/Turbo/Fixpoint.lean` adds `embed`, `deduce_bytecode` (load three variables, `deduce`, embed the three results in order, as `PIR::deduce(bytecode)`) and the entry `fixpoint`:
+Gauss-Seidel sweeps until one changes nothing or a variable is bot; it writes the rounds to `control[1]` and a bot flag to `control[2]`. One thread, no atomics, so it compiles for cpp.
+Reference: `slang/turbo/oracle/dump.cpp` reads a FlatZinc file, ternarizes and interprets it into Turbo's `PIR` over a `VStore`, prints the store and the bytecodes, runs Turbo's `GaussSeidelIteration`, and prints the store again.
+Steps for a level: `elixir tools/party_saga.exs dump TRACK G SEED OUT.dzn`; `minizinc -c --solver turbo.gpu.release --fzn L.fzn party-saga.mzn OUT.dzn` (Turbo's `msc` on `MZN_SOLVER_PATH`);
+rewrite unit clauses `bool_clause([x],[])` to `bool_eq(x,true)` and the `solve` line to `solve satisfy` (the lala ternarizer rejects a unary `∨`, and `PIR` cannot interpret the search annotation);
+`dump L.fzn > L.dump`; `elixir tools/turbo_fixpoint.exs L.dump`.
+Result (CPU, one thread, `g++ -O2`): the final store equals Turbo's on every variable for
+scout (g=2, seed 1) 4,869 variables and 4,544 bytecodes, 9 rounds, 6 ms; party (g=4, seed 2) 40,559 and 39,810, 11 rounds, 36 ms; saga (g=6, seed 3) 306,406 and 304,170, 13 rounds, 230 ms.
+Not done: Turbo's simplifier and `preprocess_tcn` (the dump takes the plain ternarized formula), search, the objective, the GPU path (Jacobi sweeps with atomics), `ask`/extraction.

@@ -1,3 +1,3 @@
-import Turbo.Pir
+import Turbo.Fixpoint
 
-def main : IO Unit := IO.println (LeanSlang.emit Turbo.shaderModule)
+def main : IO Unit := IO.println (LeanSlang.emit Turbo.fixpointModule)
