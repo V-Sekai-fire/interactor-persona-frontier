@@ -12,6 +12,9 @@
 // TURBO_GPU_DUTY (percent, default 100) caps this process's share of the GPU: after a launch that took d ms the host sleeps d * (100 / duty - 1) ms, so a game rendering at 64 Hz gets the card in between.
 // INPUT.txt is the problem text of tools/turbo_solve.exs (header of ten integers, the store, the bytecodes, the strategies). Each launch advances every block by at most
 // SLICE_NODES nodes, so one launch is short; the host sleeps PAUSE_MS between launches. Output is the format of the CPU driver, plus launch statistics.
+// Time is a hybrid logical clock (EntityPacket/Hlc.lean: 48 bits of milliseconds, 16 of counter, one UInt64): every reply carries "hlc W", "run N W" and "status W" merge the
+// sender's stamp, so events on the player, the host and other nodes order by one clock. TURBO_TRACE=FILE appends one line per launch: "launch HLC START_NS DURATION_NS NODES".
+// A launch is shorter than the clock's millisecond, so the stamp orders it and the nanosecond fields time it.
 #include <cuda.h>
 #include <chrono>
 #include <climits>
@@ -23,6 +26,19 @@
 #include <vector>
 
 #define CHECK(call) do { CUresult r_ = (call); if (r_ != CUDA_SUCCESS) { const char* m_ = nullptr; cuGetErrorString(r_, &m_); fprintf(stderr, "%s:%d %s: %s\n", __FILE__, __LINE__, #call, m_ ? m_ : "?"); return 2; } } while (0)
+
+struct Hlc {
+    unsigned long long l = 0; unsigned c = 0;
+    static unsigned long long now_ms() { return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count(); }
+    unsigned long long send() { unsigned long long pt = now_ms(), o = l; l = std::max(l, pt); c = (l == o) ? c + 1 : 0; return pack(); }
+    unsigned long long recv(unsigned long long w) {
+        unsigned long long pt = now_ms(), o = l, ml = w >> 16; unsigned mc = w & 0xffff;
+        l = std::max(std::max(l, ml), pt);
+        if (l == o && l == ml) c = std::max(c, mc) + 1; else if (l == o) c = c + 1; else if (l == ml) c = mc + 1; else c = 0;
+        return pack();
+    }
+    unsigned long long pack() const { return (l << 16) | (c & 0xffff); }
+};
 
 struct Span { void* data; size_t count; };
 struct Globals { Span lower, upper, root_lower, root_upper, snap_lower, snap_upper, best_lower, best_upper, code, strategies, strategy_vars, decisions, state, control, active; };
@@ -76,6 +92,8 @@ int main(int argc, char** argv) {
     CHECK(cuMemcpyHtoD(gp, &g, gsize));
 
     using clk = std::chrono::steady_clock;
+    Hlc hlc;
+    FILE* trace = getenv("TURBO_TRACE") ? fopen(getenv("TURBO_TRACE"), "a") : nullptr;
     const double duty = getenv("TURBO_GPU_DUTY") ? atof(getenv("TURBO_GPU_DUTY")) : 100.0;
     auto start = clk::now();
     int launches = 0;
@@ -89,6 +107,7 @@ int main(int argc, char** argv) {
             if (cuLaunchKernel(fn, blocks, 1, 1, 256, 1, 1, 0, 0, nullptr, nullptr) != CUDA_SUCCESS || cuCtxSynchronize() != CUDA_SUCCESS) { fprintf(stderr, "launch failed\n"); return -1; }
             double ms = std::chrono::duration<double, std::milli>(clk::now() - t0).count();
             launches++; did++; sum_ms += ms; if (ms > max_ms) max_ms = ms;
+            unsigned long long stamp = hlc.send();
             cuMemcpyDtoH(state.data(), d_state, state.size() * sizeof(int));
             done = true;
             int finished = 0;
@@ -96,9 +115,10 @@ int main(int argc, char** argv) {
             for (int b = 0; b < blocks; ++b) { if (state[b * STATE + 16] != 5) done = false; else finished++; total_nodes += state[b * STATE + 7]; }
             int approx = 0;
             cuMemcpyDtoH(&approx, d_ctl + 11 * sizeof(int), sizeof(int));
+            if (trace) fprintf(trace, "launch %llu %lld %lld %ld\n", stamp, (long long)std::chrono::duration_cast<std::chrono::nanoseconds>(t0 - start).count(), (long long)(ms * 1e6), total_nodes);
             if (approx != last_approx) {
                 last_approx = approx;
-                fprintf(stderr, "best bound %d at %.1f ms (launch %d, %ld nodes)\n", approx, std::chrono::duration<double, std::milli>(clk::now() - start).count(), launches, total_nodes);
+                fprintf(stderr, "best bound %d hlc %llu at %.1f ms (launch %d, %ld nodes)\n", approx, stamp, std::chrono::duration<double, std::milli>(clk::now() - start).count(), launches, total_nodes);
             }
             if (getenv("TURBO_PROGRESS") && launches % atoi(getenv("TURBO_PROGRESS")) == 0)
                 fprintf(stderr, "launch %d: %ld nodes, %d of %d blocks done, best bound %d\n", launches, total_nodes, finished, blocks, approx);
@@ -110,7 +130,8 @@ int main(int argc, char** argv) {
     auto status_line = [&]() {
         long nodes = 0;
         for (int b = 0; b < blocks; ++b) nodes += state[b * STATE + 7];
-        printf("status %s nodes %ld approx %d launches %d\n", done ? "done" : "running", nodes, last_approx, launches);
+        if (trace) fflush(trace);
+        printf("status %s nodes %ld approx %d launches %d hlc %llu\n", done ? "done" : "running", nodes, last_approx, launches, hlc.send());
         fflush(stdout);
     };
     auto save_all = [&](const char* path, bool writing) -> bool {
@@ -132,7 +153,9 @@ int main(int argc, char** argv) {
     if (getenv("TURBO_SERVE")) {
         char line[512];
         while (fgets(line, sizeof line, stdin)) {
-            int count = 0; char path[400];
+            int count = 0; char path[400]; unsigned long long peer = 0;
+            if (sscanf(line, "run %d %llu", &count, &peer) >= 2) hlc.recv(peer);
+            else if (sscanf(line, "status %llu", &peer) == 1) hlc.recv(peer);
             if (sscanf(line, "run %d", &count) == 1) { if (step(count) < 0) return 2; status_line(); }
             else if (!strncmp(line, "status", 6)) status_line();
             else if (sscanf(line, "save %399s", path) == 1) { printf(save_all(path, true) ? "saved\n" : "save failed\n"); fflush(stdout); }

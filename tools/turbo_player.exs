@@ -11,6 +11,8 @@
 # Usage: elixir tools/turbo_player.exs <level.cp> [--slice NODES] [--max-load L] [--max-gpu PERCENT] [--poll-ms MS] [--max-slices N] [--checkpoint FILE]
 #   the level is the file's base name: scout, party or saga (the enumeration `level` of the domain).
 # --fzn FILE (the level's FlatZinc) with --printer (the cp_dump binary, default turbo-runs/cp_dump) writes the solution in MiniZinc format to solution.mzn in the scratch folder at the end.
+# Time is the entity packet's hybrid logical clock (48 bits of milliseconds, 16 of counter): commands to the GPU host carry the player's stamp, replies carry the host's, and with TURBO_TRACE=FILE
+# each slice appends "slice HLC PLAN_MS RUN_MS" to the host's launch lines, so tools/turbo_profile.exs can order them and split planner time from GPU time.
 # Free means the one-minute load average is under --max-load (default 4, the host has 8 threads) and the GPU is under --max-gpu percent busy (default 30).
 {opts, [cp_path], _} = OptionParser.parse(System.argv(), strict: [slice: :integer, max_load: :float, max_gpu: :integer, poll_ms: :integer, max_slices: :integer, checkpoint: :string, engine: :string, blocks: :integer, power: :integer, gpu_slice: :integer, duty: :float, save_every: :integer, fzn: :string, printer: :string])
 engine = Keyword.get(opts, :engine, "cpu")
@@ -53,6 +55,31 @@ gpu_percent = fn ->
   end
 end
 {:ok, own} = Agent.start_link(fn -> %{burst_ms: 0, checked_at: System.monotonic_time(:millisecond)} end)
+{:ok, clock} = Agent.start_link(fn -> {0, 0} end)
+now_ms = fn -> System.os_time(:millisecond) end
+hlc_send = fn ->
+  Agent.get_and_update(clock, fn {l0, c0} ->
+    l = max(l0, now_ms.())
+    c = if l == l0, do: c0 + 1, else: 0
+    {Bitwise.bor(Bitwise.bsl(l, 16), Bitwise.band(c, 0xFFFF)), {l, c}}
+  end)
+end
+hlc_recv = fn word ->
+  Agent.update(clock, fn {l0, c0} ->
+    ml = Bitwise.bsr(word, 16)
+    mc = Bitwise.band(word, 0xFFFF)
+    l = Enum.max([l0, ml, now_ms.()])
+    c = cond do
+      l == l0 and l == ml -> max(c0, mc) + 1
+      l == l0 -> c0 + 1
+      l == ml -> mc + 1
+      true -> 0
+    end
+    {l, c}
+  end)
+end
+trace = fn line -> if (path = System.get_env("TURBO_TRACE")), do: File.write!(path, line <> "\n", [:append]) end
+
 # The GPU reading includes this process's own launches: subtract its share of the time since the last reading.
 others_gpu = fn ->
   reading = gpu_percent.()
@@ -123,6 +150,10 @@ gpu_reply = fn port, command ->
   |> Enum.reduce_while([], fn line, seen ->
     cond do
       String.starts_with?(line, "best bound") -> IO.puts("  " <> line); {:cont, seen}
+      match?([_, _], Regex.run(~r/hlc (\d+)/, line)) and String.starts_with?(line, "status") ->
+        [_, w] = Regex.run(~r/hlc (\d+)/, line)
+        hlc_recv.(String.to_integer(w))
+        {:halt, Enum.reverse([line | seen])}
       terminal.(line) -> {:halt, Enum.reverse([line | seen])}
       true -> {:cont, [line | seen]}
     end
@@ -144,7 +175,7 @@ end
 run_gpu_slice = fn ->
   port = gpu_port.()
   t0 = System.monotonic_time(:millisecond)
-  [status] = Enum.filter(gpu_reply.(port, "run #{slice}"), &String.starts_with?(&1, "status"))
+  [status] = Enum.filter(gpu_reply.(port, "run #{slice} #{hlc_send.()}"), &String.starts_with?(&1, "status"))
   Agent.update(own, fn st -> %{st | burst_ms: st.burst_ms + System.monotonic_time(:millisecond) - t0} end)
   n = Agent.get_and_update(gpu_state, fn st -> {st.slices + 1, %{st | slices: st.slices + 1}} end)
   if rem(n, Keyword.get(opts, :save_every, 50)) == 0, do: gpu_reply.(port, "save " <> checkpoint)
@@ -169,7 +200,9 @@ print_solution = fn ->
 end
 
 loop = fn loop, slices ->
+  plan_started = System.monotonic_time(:microsecond)
   steps = plan.(free?.(), done?.())
+  plan_ms = (System.monotonic_time(:microsecond) - plan_started) / 1000
   cond do
     steps == [] ->
       IO.puts("done after #{slices} slice(s); result in #{Path.join(scratch, "result.txt")}")
@@ -183,7 +216,9 @@ loop = fn loop, slices ->
       Process.sleep(poll_ms)
       loop.(loop, slices)
     hd(steps) == "solve-slice" ->
+      run_started = System.monotonic_time(:microsecond)
       status = run_slice.()
+      trace.("slice #{hlc_send.()} #{Float.round(plan_ms, 2)} #{Float.round((System.monotonic_time(:microsecond) - run_started) / 1000, 2)}")
       IO.puts("slice #{slices + 1}: #{status}")
       loop.(loop, slices + 1)
   end
