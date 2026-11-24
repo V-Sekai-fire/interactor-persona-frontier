@@ -106,11 +106,19 @@ gpu_line = fn port ->
 end
 gpu_reply = fn port, command ->
   Port.command(port, command <> "\n")
+  # the reply that ends a command: status for run and status, saved for save, loaded for load
+  terminal = fn line ->
+    cond do
+      String.starts_with?(command, "save") -> line in ["saved", "save failed"]
+      String.starts_with?(command, "load") -> line in ["loaded", "load failed"]
+      true -> String.starts_with?(line, "status")
+    end
+  end
   Stream.repeatedly(fn -> gpu_line.(port) end)
   |> Enum.reduce_while([], fn line, seen ->
     cond do
       String.starts_with?(line, "best bound") -> IO.puts("  " <> line); {:cont, seen}
-      String.starts_with?(line, "status") or line in ["saved", "loaded", "save failed", "load failed"] -> {:halt, Enum.reverse([line | seen])}
+      terminal.(line) -> {:halt, Enum.reverse([line | seen])}
       true -> {:cont, [line | seen]}
     end
   end)

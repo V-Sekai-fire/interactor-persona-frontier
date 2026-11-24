@@ -132,7 +132,7 @@ int main(int argc, char** argv) {
             if (sscanf(line, "run %d", &count) == 1) { if (step(count) < 0) return 2; status_line(); }
             else if (!strncmp(line, "status", 6)) status_line();
             else if (sscanf(line, "save %399s", path) == 1) { printf(save_all(path, true) ? "saved\n" : "save failed\n"); fflush(stdout); }
-            else if (sscanf(line, "load %399s", path) == 1) { printf(save_all(path, false) ? "loaded\n" : "load failed\n"); fflush(stdout); status_line(); }
+            else if (sscanf(line, "load %399s", path) == 1) { printf(save_all(path, false) ? "loaded\n" : "load failed\n"); fflush(stdout); }
             else if (!strncmp(line, "result", 6)) break;
             else if (!strncmp(line, "quit", 4)) return 0;
         }
