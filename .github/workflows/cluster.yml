@@ -1,11 +1,14 @@
 # SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
 # SPDX-License-Identifier: Apache-2.0 OR MIT
-# The solver cluster over a real network: a coordinator and three workers are four containers with four addresses on one Docker network, joined as Erlang nodes with a
-# shared cookie. One worker holds its first job (it is stolen), one dies on its first assignment (its job is redone). Nothing in the test depends on speed or on a delay. CPU nodes only: a runner has no GPU.
+# The solver cluster and its fault checks, on the smallest level only (scout, 32 subproblems). CPU nodes only: a runner has no GPU.
+# 1. An answer depends only on its job: every subproblem on three hosts in three orders (tools/cluster_replay.exs).
+# 2. Clean, flaky and no-quorum scenarios, all nodes in one container (tools/cluster_test.exs).
+# 3. A liar over a real network: a coordinator and four workers are five containers with five addresses, joined as Erlang nodes with a shared cookie; one worker
+#    dies on its first job and one lies about every answer. Nothing waits on a timer: the workers start when the coordinator's log says it is ready.
 name: cluster
 on:
   pull_request:
-    paths: ['tools/turbo_cluster.exs', 'tools/cluster_*.sh', 'guest/**', 'deploy/cluster/**', 'frontend/fixtures/**', '.github/workflows/cluster.yml']
+    paths: ['tools/turbo_cluster.exs', 'tools/cluster_*.exs', 'guest/**', 'deploy/cluster/**', 'frontend/fixtures/**', '.github/workflows/cluster.yml']
   push:
     branches: [main]
   workflow_dispatch:
@@ -15,23 +18,36 @@ jobs:
   cluster:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    env:
+      HOST: /opt/host/turbo_host
+      GUEST: /repo/guest/prebuilt/turbo_guest.elf
     steps:
       - uses: actions/checkout@v5
       - run: docker build -f deploy/cluster/Containerfile -t turbo-cluster .
-      - run: docker network create --subnet 172.28.0.0/24 turbo
-      - name: Coordinator and workers
+      - name: An answer depends only on its job
+        run: docker run --rm turbo-cluster elixir tools/cluster_replay.exs frontend/fixtures/scout.power5.input.txt $HOST $GUEST
+      - name: Clean, flaky and no-quorum runs
         run: |
-          run() { name=$1; ip=$2; shift 2; docker run -d --name "$name" --network turbo --ip "$ip" -e NODE_NAME="$name@$ip" "$@"; }
-          run coord 172.28.0.10 turbo-cluster elixir tools/turbo_cluster.exs coordinator frontend/fixtures/scout.cp --power 5 --workers 3 --problem frontend/fixtures/scout.power5.input.txt --cookie ci
-          sleep 5
-          docker run -d --name w1 --network turbo --ip 172.28.0.11 -e NODE_NAME=w1@172.28.0.11 turbo-cluster elixir tools/turbo_cluster.exs worker coord@172.28.0.10 /repo/guest/prebuilt/turbo_guest.elf /opt/host/turbo_host --kind cpu --budget 50000000 --cookie ci
-          docker run -d --name w2 --network turbo --ip 172.28.0.12 -e NODE_NAME=w2@172.28.0.12 turbo-cluster elixir tools/turbo_cluster.exs worker coord@172.28.0.10 /repo/guest/prebuilt/turbo_guest.elf /opt/host/turbo_host --kind cpu --budget 50000000 --hold-first-job --cookie ci
-          docker run -d --name w3 --network turbo --ip 172.28.0.13 -e NODE_NAME=w3@172.28.0.13 turbo-cluster elixir tools/turbo_cluster.exs worker coord@172.28.0.10 /repo/guest/prebuilt/turbo_guest.elf /opt/host/turbo_host --kind cpu --budget 50000000 --die-at-first-job --cookie ci
-          timeout 300 docker wait coord
+          for scenario in clean flaky noquorum; do
+            docker run --rm turbo-cluster elixir tools/cluster_test.exs run $scenario $HOST $GUEST
+          done
+      - name: A liar across five addresses
+        id: liar
+        run: |
+          docker network create --subnet 172.28.0.0/24 turbo
+          node() { name=$1; address=$2; shift 2; docker run -d --name "$name" --network turbo --ip "$address" -e NODE_NAME="$name@$address" turbo-cluster elixir tools/turbo_cluster.exs "$@"; }
+          node coord 172.28.0.10 coordinator frontend/fixtures/scout.cp --power 5 --workers 4 --replicas 2 --problem frontend/fixtures/scout.power5.input.txt --cookie ci
+          docker logs -f coord 2>&1 | grep -m 1 -q "waiting for"
+          worker="worker coord@172.28.0.10 $GUEST $HOST --kind cpu --cookie ci"
+          node w1 172.28.0.11 $worker
+          node w2 172.28.0.12 $worker
+          node w3 172.28.0.13 $worker --die-at-first-job
+          node w4 172.28.0.14 $worker --lie
+          echo "code=$(timeout 300 docker wait coord)" >> "$GITHUB_OUTPUT"
           docker logs coord > coord.log 2>&1
           cat coord.log
       - name: Judge
-        run: tools/cluster_check.sh coord.log
+        run: docker run --rm -v "$PWD/coord.log:/coord.log:ro" turbo-cluster elixir tools/cluster_test.exs judge liar /coord.log --exit ${{ steps.liar.outputs.code }}
       - name: Worker logs
         if: always()
-        run: for w in w1 w2 w3; do echo "== $w"; docker logs $w 2>&1 | tail -n 20; done
+        run: for worker in w1 w2 w3 w4; do echo "== $worker"; docker logs $worker 2>&1 | tail -n 20; done

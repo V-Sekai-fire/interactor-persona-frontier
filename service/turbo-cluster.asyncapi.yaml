@@ -3,10 +3,12 @@ info:
   title: Turbo cluster
   version: 0.1.0
   description: >
-    Distributed solving of one constraint problem. A coordinator node hands out subproblems (the search is split into 2^power of them) and shares the best
-    objective bound; worker nodes each run the solver guest ELF under libriscv and report. Nodes are Erlang nodes joined with a shared cookie, so a worker can run
-    on another machine. A node says whether it is a cpu or a gpu node. The coordinator is a queue machine with no clock: a node that asks gets the head of the queue of pending subproblems; with the queue empty and jobs in flight it takes the oldest in-flight job of a node that has finished fewer jobs than it has, by presuming that node dead for it, and whichever copy finishes first (by its stamp) wins. The same path recovers a node that really dies. Between a worker node and its
-    libriscv host the frames are length-prefixed (four bytes, big endian) on standard input and output.
+    Distributed solving of one constraint problem. A coordinator node hands out subproblems (the search is split into 2^power of them); worker nodes each run the
+    solver guest ELF under libriscv and report. Nodes are Erlang nodes joined with a shared cookie, so a worker can be on another machine. The coordinator trusts no
+    worker: a subproblem's answer depends only on the problem, its index and the bound it is assigned with, so an answer is accepted when f + 1 nodes give the same
+    one. A node whose answer differs from the accepted one gets a strike; with strikes it is on probation (its answers are checked but do not count), a run of
+    accepted answers takes a strike off, and at the strike limit it is banned. The same queue recovers a node that dies. Both sides are state machines and no
+    decision reads a clock. Between a worker node and its libriscv host the frames are length-prefixed (four bytes, big endian) on standard input and output.
   license:
     name: MIT
 servers:
@@ -68,7 +70,7 @@ components:
         type: object
         required: [pid, kind, hlc]
         properties:
-          hlc: {type: integer, format: int64, description: "the sender's hybrid logical clock (EntityPacket/Hlc.lean): 48 bits of milliseconds since the epoch, 16 of counter; a receiver merges it into its own, and the first finish of a subproblem is the smaller stamp"}
+          hlc: {type: integer, format: int64, description: "the sender's hybrid logical clock (EntityPacket/Hlc.lean): 48 bits of milliseconds since the epoch, 16 of counter; a receiver merges it into its own unless it is more than a minute ahead of the receiver's clock"}
           pid: {type: string, description: the worker process, used as the node's identity}
           kind: {type: string, enum: [cpu, gpu]}
     fromWorker:
@@ -77,14 +79,15 @@ components:
         type: object
         required: [pid, frame, hlc]
         properties:
-          hlc: {type: integer, format: int64, description: "the sender's hybrid logical clock (EntityPacket/Hlc.lean): 48 bits of milliseconds since the epoch, 16 of counter; a receiver merges it into its own, and the first finish of a subproblem is the smaller stamp"}
+          hlc: {type: integer, format: int64, description: "the sender's hybrid logical clock (EntityPacket/Hlc.lean): 48 bits of milliseconds since the epoch, 16 of counter; a receiver merges it into its own unless it is more than a minute ahead of the receiver's clock"}
           pid: {type: string}
           frame:
             type: string
             description: >
-              "U bound": a better objective bound than the last one reported.
-              "A skip bound solutions nodes": the guest finished or cancelled a subproblem and waits for the next; skip is the first subproblem not made unreachable
-              by its dive, bound its best, then its solution and node counts.
+              "U bound": a better objective bound than the last one reported (informative; the coordinator does not act on it).
+              "A skip bound solutions nodes": the guest finished or was cancelled on a subproblem and waits for the next. The four numbers are that subproblem's
+              answer and nothing of the ones before it: the first subproblem its dive did not make unreachable, its best bound, the solutions it found and the nodes
+              it searched. Two honest nodes give the same four numbers for the same subproblem and assigned bound.
               "R nodes fails solutions bound depth_max exhaustive" then one line "lower upper" per variable: the final report, with the best store.
     problem:
       summary: The problem, as the text the guest reads (a header of ten integers, the store, the bytecodes, the strategies).
@@ -92,7 +95,7 @@ components:
         type: object
         required: [text, hlc]
         properties:
-          hlc: {type: integer, format: int64, description: "the sender's hybrid logical clock (EntityPacket/Hlc.lean): 48 bits of milliseconds since the epoch, 16 of counter; a receiver merges it into its own, and the first finish of a subproblem is the smaller stamp"}
+          hlc: {type: integer, format: int64, description: "the sender's hybrid logical clock (EntityPacket/Hlc.lean): 48 bits of milliseconds since the epoch, 16 of counter; a receiver merges it into its own unless it is more than a minute ahead of the receiver's clock"}
           text: {type: string}
     toHost:
       summary: A frame for the host.
@@ -100,14 +103,14 @@ components:
         type: object
         required: [frame, hlc]
         properties:
-          hlc: {type: integer, format: int64, description: "the sender's hybrid logical clock (EntityPacket/Hlc.lean): 48 bits of milliseconds since the epoch, 16 of counter; a receiver merges it into its own, and the first finish of a subproblem is the smaller stamp"}
+          hlc: {type: integer, format: int64, description: "the sender's hybrid logical clock (EntityPacket/Hlc.lean): 48 bits of milliseconds since the epoch, 16 of counter; a receiver merges it into its own unless it is more than a minute ahead of the receiver's clock"}
           frame:
             type: string
             description: >
-              "S index bound": solve subproblem index with this global bound.
+              "S index bound": solve subproblem index with this bound. The bound is fixed when the subproblem is first handed out and comes from accepted
+              answers only, so every replica of the subproblem gets the same one.
               "D": no more subproblems.
-              "B bound": a better bound found elsewhere.
-              "C": cancel the subproblem in hand, another node finished it.
+              "C": cancel the subproblem in hand, it has been accepted.
               "X": stop.
     hostFrame:
       summary: The first frame of a host is "H" (hello); the worker answers with "P" and the problem text.
