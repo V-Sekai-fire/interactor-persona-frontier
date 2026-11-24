@@ -74,6 +74,9 @@ stdenv.mkDerivation {
     install -Dm755 .lake/build/bin/frontier_witness $out/libexec/frontier_witness
     mkdir -p $out/share/frontier
     cp -r seeds $out/share/frontier/seeds
+    # the store applies its migrations from this path relative to the working directory
+    mkdir -p $out/share/frontier/datasources/sqlite
+    cp -r datasources/sqlite/migrations $out/share/frontier/datasources/sqlite/migrations
     runHook postInstall
   '';
 
