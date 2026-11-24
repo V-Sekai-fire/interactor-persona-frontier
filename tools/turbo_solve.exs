@@ -68,7 +68,7 @@ File.write!(Path.join(scratch, "driver.cpp"), """
 struct Span { void* data; size_t count; };
 struct Globals { Span lower, upper, root_lower, root_upper, snap_lower, snap_upper, best_lower, best_upper, code, strategies, strategy_vars, decisions, state, control; };
 extern "C" void solve(ComputeVaryingInput*, void*, void*);
-static const int STATE = 32;
+static const int STATE = 36;
 template <class T> static bool save(FILE* f, std::vector<T>& v) { return fwrite(v.data(), sizeof(T), v.size(), f) == v.size(); }
 template <class T> static bool load(FILE* f, std::vector<T>& v) { return fread(v.data(), sizeof(T), v.size(), f) == v.size(); }
 int main(int argc, char** argv) {

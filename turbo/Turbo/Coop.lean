@@ -16,6 +16,8 @@ def sFound := 21
 /-- State slot 28: how many entries of the block's list of changed variables are valid. State slot 29: when non-zero, the next launch treats every variable as changed (a loaded checkpoint does not carry the lists). -/
 def sDirtyN := 28
 def sResync := 29
+/-- State slot 33: parity of the list of changed variables being filled; slots 28 and 32 count the entries of list 0 and list 1. -/
+def sDirtyPar := 33
 def lanes : E := n 256
 def tidE : E := v "tid"
 def sync : S := .expr (call "AllMemoryBarrierWithGroupSync" [])
@@ -32,27 +34,33 @@ def strided (i : String) (start bound : E) (body : List S) : S :=
     [.declInit int i (add start tidE), .whileLoop (lt (v i) bound) (body ++ [.assign (v i) (add (v i) lanes)])] []
 
 def dirtyFlagAt (x : E) : E := .index (v "dirty_flag") (add blockBase x)
-def dirtyListAt (i : E) : E := .index (v "dirty_list") (add blockBase i)
+/-- The block keeps two lists of changed variables and alternates between them: one holds the variables found changed and not yet used, the other is being filled while the first is used. `par` is the parity of the list being filled. -/
+def dirtyListAt (par i : E) : E := .index (v "dirty_list") (add (mul (mul (v "b") (n 2)) vars) (add (mul par vars) i))
+def dirtyCountAt (par : E) : E := .index (v "state") (add (mul (v "b") (n 36)) (add (n sDirtyN) (mul par (n 4))))
 def propMarkAt (p : E) : E := .index (v "prop_mark") (add (mul (v "b") (ctl cBytecodes)) p)
 def workListAt (i : E) : E := .index (v "work_list") (add (mul (v "b") (ctl cBytecodes)) i)
 def bigListAt (i : E) : E := .index (v "big_list") (add blockBase i)
 def bigDegree : Nat := 48
+def queueCount : E := .index (v "s_nw") (v "ph")
+def bigCount : E := .index (v "s_nbig") (v "ph")
 /-- Queue propagator `p` for this round unless it already is: the mark is set by the first thread to ask. -/
 def queueProp (p : E) : List S :=
   [.declInit int "q_prop" p, .declInit int "was_marked" (n 0),
    .expr (call "InterlockedExchange" [propMarkAt (v "q_prop"), n 1, v "was_marked"]),
    when (eq (v "was_marked") (n 0))
-     [.declInit int "work_slot" (n 0), .expr (call "InterlockedAdd" [shared "s_nw", n 1, v "work_slot"]), .assign (workListAt (v "work_slot")) (v "q_prop")]]
-/-- A variable changed: put it on the block's list of changed variables once (the flag says whether it is already there). -/
+     [.declInit int "work_slot" (n 0), .expr (call "InterlockedAdd" [queueCount, n 1, v "work_slot"]), .assign (workListAt (v "work_slot")) (v "q_prop")]]
+/-- A variable changed: put it on the list being filled once (the flag says whether it is on a list already). -/
 def markDirty (x : E) : List S :=
   [.declInit int "was_dirty" (n 0), .expr (call "InterlockedExchange" [dirtyFlagAt x, n 1, v "was_dirty"]),
    when (eq (v "was_dirty") (n 0))
-     [.declInit int "dirty_slot" (n 0), .expr (call "InterlockedAdd" [stateAt sDirtyN, n 1, v "dirty_slot"]), .assign (dirtyListAt (v "dirty_slot")) x]]
+     [.declInit int "fill_par" (stateAt sDirtyPar), .declInit int "dirty_slot" (n 0),
+      .expr (call "InterlockedAdd" [dirtyCountAt (v "fill_par"), n 1, v "dirty_slot"]), .assign (dirtyListAt (v "fill_par") (v "dirty_slot")) x]]
 /-- Every variable changed: after a subproblem root is loaded, or a checkpoint. All threads. -/
 def markAllDirty : List S :=
-  [strided "k" (n 0) vars [.assign (dirtyFlagAt (v "k")) (n 1), .assign (dirtyListAt (v "k")) (v "k")],
+  [.declInit int "all_par" (stateAt sDirtyPar),
+   strided "k" (n 0) vars [.assign (dirtyFlagAt (v "k")) (n 1), .assign (dirtyListAt (v "all_par") (v "k")) (v "k")],
    sync,
-   leader [setState sDirtyN vars],
+   leader [.assign (dirtyCountAt (v "all_par")) vars],
    sync]
 
 def embedA : SlangFunctionDecl :=
@@ -90,48 +98,50 @@ def params2 : List SlangBinding := [param "b" int, param "tid" int]
 def propagateCoop : SlangFunctionDecl :=
   { name := "propagate_coop", params := params2,
     body := [
-      leader [setState sLeaf (n 0)],
+      leader [setState sLeaf (n 0), .assign (.index (v "s_nw") (n 0)) (n 0), .assign (.index (v "s_nw") (n 1)) (n 0), .assign (.index (v "s_nbig") (n 0)) (n 0), .assign (.index (v "s_nbig") (n 1)) (n 0)],
       sync,
-      .declInit int "again" (pick (ne (stateAt sDirtyN) (n 0)) (n 1) (n 0)),
+      .declInit int "cur" (stateAt sDirtyPar),
+      .declInit int "ph" (n 0),
+      .declInit int "again" (pick (ne (dirtyCountAt (v "cur")) (n 0)) (n 1) (n 0)),
       .whileLoop (ne (v "again") (n 0))
-        [.declInit int "dirty_count" (stateAt sDirtyN),
-         sync,
-         leader [.assign (shared "s_nw") (n 0), .assign (shared "s_nbig") (n 0)],
-         sync,
+        [.declInit int "dirty_count" (dirtyCountAt (v "cur")),
+         -- the other list is filled from now on; the counters of the other parity are the ones this round does not use
+         leader [setState 24 clockNow, setState sDirtyPar (sub (n 1) (v "cur")), .assign (.index (v "s_nw") (sub (n 1) (v "ph"))) (n 0), .assign (.index (v "s_nbig") (sub (n 1) (v "ph"))) (n 0)],
          -- the propagators of every changed variable, each once: a variable with few watchers is walked by one thread, one with many by the whole block
          strided "i" (n 0) (v "dirty_count")
-           [.declInit int "x" (dirtyListAt (v "i")),
+           [.declInit int "x" (dirtyListAt (v "cur") (v "i")),
             .assign (dirtyFlagAt (v "x")) (n 0),
             .declInit int "k" (.index (v "var_start") (v "x")),
             .declInit int "stop" (.index (v "var_start") (add (v "x") (n 1))),
             .ifThen (gt (sub (v "stop") (v "k")) (n bigDegree))
-              [.declInit int "big_slot" (n 0), .expr (call "InterlockedAdd" [shared "s_nbig", n 1, v "big_slot"]), .assign (bigListAt (v "big_slot")) (v "x")]
+              [.declInit int "big_slot" (n 0), .expr (call "InterlockedAdd" [bigCount, n 1, v "big_slot"]), .assign (bigListAt (v "big_slot")) (v "x")]
               [.whileLoop (lt (v "k") (v "stop")) (queueProp (.index (v "var_props") (v "k")) ++ [.assign (v "k") (add (v "k") (n 1))])]],
          sync,
-         .declInit int "big_count" (shared "s_nbig"),
-         .declInit int "bj" (n 0),
-         .whileLoop (lt (v "bj") (v "big_count"))
-           [.declInit int "bx" (bigListAt (v "bj")),
-            strided "bk" (.index (v "var_start") (v "bx")) (.index (v "var_start") (add (v "bx") (n 1))) (queueProp (.index (v "var_props") (v "bk"))),
-            .assign (v "bj") (add (v "bj") (n 1))],
-         sync,
-         .declInit int "work_count" (shared "s_nw"),
-         leader [setState sDirtyN (n 0), setState 30 (add (stateAt 30) (v "work_count")), setState 31 (add (stateAt 31) (n 1))],
-         sync,
+         .declInit int "big_count" bigCount,
+         .ifThen (ne (v "big_count") (n 0))
+           [.declInit int "bj" (n 0),
+            .whileLoop (lt (v "bj") (v "big_count"))
+              [.declInit int "bx" (bigListAt (v "bj")),
+               strided "bk" (.index (v "var_start") (v "bx")) (.index (v "var_start") (add (v "bx") (n 1))) (queueProp (.index (v "var_props") (v "bk"))),
+               .assign (v "bj") (add (v "bj") (n 1))],
+            sync] [],
+         .declInit int "work_count" queueCount,
+         leader [setState 34 (add (stateAt 34) (bin ">>" (bin "-" clockNow (stateAt 24)) (n 4))), setState 24 clockNow, .assign (dirtyCountAt (v "cur")) (n 0), setState 30 (add (stateAt 30) (v "work_count")), setState 31 (add (stateAt 31) (n 1))],
          strided "j" (n 0) (v "work_count")
            [.declInit int "q" (workListAt (v "j")),
             .assign (propMarkAt (v "q")) (n 0),
             .expr (call "deduce_bytecode_a" [v "b", uintOf (v "q")])],
          sync,
-         .assign (v "again") (pick (land (ne (stateAt sDirtyN) (n 0)) (eq (stateAt sBot) (n 0))) (n 1) (n 0)),
-         sync],
+         leader [setState 35 (add (stateAt 35) (bin ">>" (bin "-" clockNow (stateAt 24)) (n 4)))],
+         .assign (v "cur") (sub (n 1) (v "cur")),
+         .assign (v "ph") (sub (n 1) (v "ph")),
+         .assign (v "again") (pick (land (ne (dirtyCountAt (v "cur")) (n 0)) (eq (stateAt sBot) (n 0))) (n 1) (n 0))],
       -- a failure leaves changed variables on the list: clear them, the store is restored before the next propagation
-      .ifThen (ne (stateAt sDirtyN) (n 0))
-        [.declInit int "left_over" (stateAt sDirtyN),
+      .ifThen (ne (dirtyCountAt (v "cur")) (n 0))
+        [.declInit int "left_over" (dirtyCountAt (v "cur")),
+         strided "i" (n 0) (v "left_over") [.assign (dirtyFlagAt (dirtyListAt (v "cur") (v "i"))) (n 0)],
          sync,
-         strided "i" (n 0) (v "left_over") [.assign (dirtyFlagAt (dirtyListAt (v "i"))) (n 0)],
-         sync,
-         leader [setState sDirtyN (n 0)],
+         leader [.assign (dirtyCountAt (v "cur")) (n 0)],
          sync] [],
       leader [.assign (shared "s_flag") (n 0)],
       sync,
@@ -307,7 +317,7 @@ def solveCoopFn : SlangFunctionDecl :=
       leader [when (eq (stateAt sPhase) (n 0)) initBlock],
       sync,
       .declInit int "num_subproblems" (bin "<<" (n 1) (ctl cPower)),
-      leader [setState sYield (n 0), setState sSliceStart (stateAt sNodes), setState 25 (n 0), setState 26 (n 0), setState 27 clockNow, setState 30 (n 0), setState 31 (n 0)],
+      leader [setState sYield (n 0), setState sSliceStart (stateAt sNodes), setState 25 (n 0), setState 26 (n 0), setState 27 clockNow, setState 30 (n 0), setState 31 (n 0), setState 34 (n 0), setState 35 (n 0)],
       sync,
       .ifThen (ne (stateAt sResync) (n 0)) (markAllDirty ++ [leader [setState sResync (n 0)], sync]) [],
       .whileLoop (land (land (ne (stateAt sPhase) (n phaseDone)) (ne (stateAt sPhase) (n phaseAwait))) (eq (stateAt sYield) (n 0)))
@@ -324,7 +334,8 @@ def incrementalBuffers : List SlangBinding :=
    global "prop_mark" (.rwBuf int) 18, global "work_list" (.rwBuf int) 19, global "big_list" (.rwBuf int) 20]
 
 def coopShared : List SlangGroupSharedDecl :=
-  ["s_changed", "s_flag", "s_idx", "s_key", "s_have", "s_pick", "s_nw", "s_nbig"].map fun name => { name, elemType := int }
+  (["s_changed", "s_flag", "s_idx", "s_key", "s_have", "s_pick"].map fun name => { name, elemType := int }) ++
+  [{ name := "s_nw", elemType := int, dims := [2] }, { name := "s_nbig", elemType := int, dims := [2] }]
 
 def solveCoopModule : SlangShaderModule :=
   { shaderModule with
