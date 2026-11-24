@@ -6,8 +6,9 @@
 # For that engine the gate is the GPU only, minus this process's own recent share.
 # Usage: elixir tools/turbo_player.exs <level.cp> [--slice NODES] [--max-load L] [--max-gpu PERCENT] [--poll-ms MS] [--max-slices N] [--checkpoint FILE]
 #   the level is the file's base name: scout, party or saga (the enumeration `level` of the domain).
+# --fzn FILE (the level's FlatZinc) with --printer (the cp_dump binary, default turbo-runs/cp_dump) writes the solution in MiniZinc format to solution.mzn in the scratch folder at the end.
 # Free means the one-minute load average is under --max-load (default 4, the host has 8 threads) and the GPU is under --max-gpu percent busy (default 30).
-{opts, [cp_path], _} = OptionParser.parse(System.argv(), strict: [slice: :integer, max_load: :float, max_gpu: :integer, poll_ms: :integer, max_slices: :integer, checkpoint: :string, engine: :string, blocks: :integer, power: :integer, gpu_slice: :integer, duty: :float, save_every: :integer])
+{opts, [cp_path], _} = OptionParser.parse(System.argv(), strict: [slice: :integer, max_load: :float, max_gpu: :integer, poll_ms: :integer, max_slices: :integer, checkpoint: :string, engine: :string, blocks: :integer, power: :integer, gpu_slice: :integer, duty: :float, save_every: :integer, fzn: :string, printer: :string])
 engine = Keyword.get(opts, :engine, "cpu")
 gpu? = engine == "gpu"
 slice = Keyword.get(opts, :slice, if(gpu?, do: 10, else: 100))
@@ -153,11 +154,22 @@ run_gpu_slice = fn ->
 end
 run_slice = if gpu?, do: run_gpu_slice, else: run_cpu_slice
 
+print_solution = fn ->
+  fzn = Keyword.get(opts, :fzn)
+  printer = Keyword.get(opts, :printer, "/mnt/fire/6-datasource/turbo-runs/cp_dump")
+  if fzn != nil do
+    {out, 0} = System.cmd("nice", ["-n", "19", printer, "-arch", "barebones", "-or", "1", "-sub", "0", fzn], env: [{"TURBO_BEST", Path.join(scratch, "result.txt")}])
+    File.write!(Path.join(scratch, "solution.mzn"), out)
+    IO.puts("solution in #{Path.join(scratch, "solution.mzn")}")
+  end
+end
+
 loop = fn loop, slices ->
   steps = plan.(free?.(), done?.())
   cond do
     steps == [] ->
       IO.puts("done after #{slices} slice(s); result in #{Path.join(scratch, "result.txt")}")
+      print_solution.()
       IO.puts(File.read!(Path.join(scratch, "result.txt")) |> String.split("\n") |> Enum.take(4) |> Enum.join("\n"))
     max_slices != :infinity and slices >= max_slices ->
       if gpu? and Agent.get(gpu_state, & &1.port) != nil, do: IO.puts("  " <> Enum.join(gpu_reply.(Agent.get(gpu_state, & &1.port), "save " <> checkpoint), " / "))

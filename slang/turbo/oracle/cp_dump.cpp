@@ -47,6 +47,19 @@ int main(int argc, char** argv) {
   Configuration<standard_allocator> config = parse_args(argc, argv);
   CP<Itv> cp(config);
   cp.preprocess();
+  if (const char* best_path = getenv("TURBO_BEST")) {
+    std::ifstream in(best_path);
+    std::string line;
+    while (std::getline(in, line) && line.rfind("best", 0) != 0) {}
+    cp.best->join_top();
+    for (int i = 0; i < cp.best->vars(); ++i) {
+      long lb, ub;
+      in >> lb >> ub;
+      cp.best->embed(i, Itv::local_type(lb, ub));
+    }
+    cp.print_solution(*cp.best);
+    return 0;
+  }
   auto& p = *cp.iprop;
   printf("bot %d\n", (int)p.is_bot());
   printf("variables %d\n", p.vars());
