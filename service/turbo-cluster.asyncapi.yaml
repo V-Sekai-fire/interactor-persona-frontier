@@ -5,8 +5,7 @@ info:
   description: >
     Distributed solving of one constraint problem. A coordinator node hands out subproblems (the search is split into 2^power of them) and shares the best
     objective bound; worker nodes each run the solver guest ELF under libriscv and report. Nodes are Erlang nodes joined with a shared cookie, so a worker can run
-    on another machine. A node says whether it is a cpu or a gpu node and the coordinator measures its speed; an idle node takes a subproblem from a clearly slower
-    node by presuming that node dead for it, and whichever copy finishes first wins. The same path recovers a node that really dies. Between a worker node and its
+    on another machine. A node says whether it is a cpu or a gpu node. The coordinator is a queue machine with no clock: a node that asks gets the head of the queue of pending subproblems; with the queue empty and jobs in flight it takes the oldest in-flight job of a node that has finished fewer jobs than it has, by presuming that node dead for it, and whichever copy finishes first (by its stamp) wins. The same path recovers a node that really dies. Between a worker node and its
     libriscv host the frames are length-prefixed (four bytes, big endian) on standard input and output.
   license:
     name: MIT

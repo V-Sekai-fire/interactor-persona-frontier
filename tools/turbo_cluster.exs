@@ -4,17 +4,17 @@
 # SPDX-License-Identifier: Apache-2.0 AND MIT
 # Distributed solving over Erlang distribution: a coordinator node hands out subproblems and shares the best bound; worker nodes (one per core, GPU or machine) each run
 # the solver guest ELF under libriscv. Nodes are cookie-authenticated Erlang nodes, so a worker can be on another machine: start it there with the same cookie.
-#   coordinator:  elixir --name coord@HOST --cookie C tools/turbo_cluster.exs coordinator LEVEL.cp [--power P] [--workers N] [--steal-after-ms MS] [--no-steal] [--problem INPUT.txt]
+#   coordinator:  elixir --name coord@HOST --cookie C tools/turbo_cluster.exs coordinator LEVEL.cp [--power P] [--workers N] [--no-steal] [--problem INPUT.txt]
 #   worker:       elixir --name wK@HOST    --cookie C tools/turbo_cluster.exs worker coord@HOST GUEST.elf HOST_BINARY [--kind cpu|gpu] [--budget INSTRUCTIONS]
-#   local test:   elixir tools/turbo_cluster.exs local LEVEL.cp [--power P] [--nodes gpu:1,cpu:2] [--slow-us US] [--steal-after-ms MS] [--no-steal] [--kill-one] [--frame-ms 2.0]
+#   local test:   elixir tools/turbo_cluster.exs local LEVEL.cp [--power P] [--nodes gpu:1,cpu:2] [--slow-us US] [--no-steal] [--kill-one] [--frame-ms 2.0]
 # --frame-ms runs every guest in 64 Hz frames of that much compute time (the host sleeps to the frame edge), for a machine that also runs a real-time game.
-# A node says what it is (cpu or gpu); the coordinator measures its speed in nodes per second. A node with nothing to do takes a subproblem from a clearly slower node by
+# A node says what it is (cpu or gpu). The coordinator is a queue machine: a node that asks gets the head of the queue of pending subproblems; with the queue empty and jobs in flight it takes the oldest in-flight job of a node that has finished fewer jobs than it has by
 # presuming that node dead: the subproblem is redone, whichever copy finishes first wins, and the other is cancelled. The same path recovers a node that really dies.
 # Message formats are in service/turbo-cluster.asyncapi.yaml.
 {opts, [role | args], _} =
   OptionParser.parse(System.argv(),
     strict: [power: :integer, workers: :integer, budget: :integer, cookie: :string, guest: :string, host: :string, kind: :string, nodes: :string,
-             slow_us: :integer, problem: :string, frame_ms: :float, steal_after_ms: :integer, no_steal: :boolean, kill_one: :boolean])
+             slow_us: :integer, problem: :string, frame_ms: :float, no_steal: :boolean, kill_one: :boolean, hold_first_job: :boolean, die_at_first_job: :boolean])
 root = File.cwd!()
 runs = "/mnt/fire/6-datasource/turbo-runs"
 cookie = Keyword.get(opts, :cookie, "turbo_cluster")
@@ -66,19 +66,11 @@ coordinate = fn cp_path, power, wanted ->
   end
   [_, _, _, objective] = text |> String.split() |> Enum.take(4) |> Enum.map(&String.to_integer/1)
   total = Bitwise.bsl(1, power)
-  steal_after = if Keyword.get(opts, :no_steal, false), do: :never, else: Keyword.get(opts, :steal_after_ms, 500)
+  steal? = not Keyword.get(opts, :no_steal, false)
   started = System.monotonic_time(:millisecond)
   now = fn -> System.monotonic_time(:millisecond) end
-  IO.puts("coordinator #{node()} waiting for #{wanted} worker node(s); #{total} subproblems; stealing #{if steal_after == :never, do: "off", else: "after #{steal_after} ms"}")
+  IO.puts("coordinator #{node()} waiting for #{wanted} worker node(s); #{total} subproblems; stealing #{if steal?, do: "on", else: "off"}")
 
-  # The speed of a node in guest nodes per second: measured over its last subproblem, else a prior from its kind.
-  speed = fn st, pid ->
-    case Map.get(st.workers, pid) do
-      %{rate: rate} when rate != nil -> rate
-      %{kind: "gpu"} -> 100.0
-      _ -> 10.0
-    end
-  end
   share = fn st, from, bound ->
     if bound < st.bound do
       for {pid, _} <- st.workers, pid != from, do: send(pid, {:to_host, "B #{bound}", hlc_send.()})
@@ -105,13 +97,12 @@ coordinate = fn cp_path, power, wanted ->
   # Work stealing: a victim is a node whose subproblem has run longer than the threshold and which is clearly slower than the thief.
   # Its subproblem is treated as lost (the node is presumed dead for that job) and given to the thief; the victim keeps running until it is cancelled.
   victim = fn st, thief ->
-    if steal_after == :never do
-      nil
-    else
+    if steal? do
+      thief_done = Map.fetch!(st.workers, thief).done_jobs
       st
       |> live_jobs.(thief)
-      |> Enum.filter(fn {pid, w} -> length(runners.(st, w.job)) == 1 and now.() - w.since >= steal_after and speed.(st, thief) >= 1.5 * speed.(st, pid) end)
-      |> Enum.min_by(fn {_, w} -> w.since end, fn -> nil end)
+      |> Enum.filter(fn {_pid, w} -> length(runners.(st, w.job)) == 1 and w.done_jobs < thief_done end)
+      |> Enum.min_by(fn {_, w} -> w.seq end, fn -> nil end)
     end
   end
 
@@ -120,7 +111,7 @@ coordinate = fn cp_path, power, wanted ->
     send(pid, {:to_host, "S #{job} #{st.bound}", hlc_send.()})
     trace.("assign", "job=#{job} to=#{inspect(pid)}")
     w = Map.fetch!(st.workers, pid)
-    %{st | workers: Map.put(st.workers, pid, %{w | job: job, since: now.(), nodes_at_start: Map.get(st.nodes, pid, 0)})}
+    %{st | workers: Map.put(st.workers, pid, %{w | job: job, seq: st.seq}), seq: st.seq + 1}
   end
 
   loop = fn loop, st ->
@@ -131,7 +122,7 @@ coordinate = fn cp_path, power, wanted ->
         Process.monitor(pid)
         send(pid, {:problem, text, hlc_send.()})
         st = %{st | alive: MapSet.put(st.alive, pid)}
-        st = put_in(st.workers[pid], %{kind: kind, job: nil, since: now.(), rate: nil, nodes_at_start: 0, done_jobs: 0})
+        st = put_in(st.workers[pid], %{kind: kind, job: nil, seq: 0, done_jobs: 0})
         st = if map_size(st.workers) >= wanted and not st.started, do: wake.(%{st | started: true, parked: st.parked ++ st.pending, pending: []}), else: st
         loop.(loop, st)
       {:from_worker, pid, <<"U ", rest::binary>>, w} ->
@@ -167,10 +158,8 @@ coordinate = fn cp_path, power, wanted ->
               %{st | next: max(st.next, skip)}
             end
           end
-        elapsed = max(now.() - w.since, 1)
-        rate = if w.job != nil and nodes > w.nodes_at_start, do: (nodes - w.nodes_at_start) * 1000 / elapsed, else: w.rate
         st = %{st | nodes: Map.put(st.nodes, pid, nodes), solutions: Map.put(st.solutions, pid, solutions),
-                    workers: Map.put(st.workers, pid, %{w | job: nil, rate: rate})}
+                    workers: Map.put(st.workers, pid, %{w | job: nil, done_jobs: w.done_jobs + (if w.job != nil, do: 1, else: 0)})}
         st = if st.parked != [] and live_jobs.(st, nil) == [], do: wake.(st), else: st
         {job, st} = take.(st)
         cond do
@@ -212,7 +201,7 @@ coordinate = fn cp_path, power, wanted ->
     end
   end
   state = %{workers: %{}, next: 0, bound: 2_147_483_647, retry: [], solutions: %{}, nodes: %{}, results: [], pending: [], parked: [], started: false, alive: MapSet.new(),
-            done: MapSet.new(), finished_by: %{}, steals: 0, wasted: 0, won: %{}, reordered: 0}
+            done: MapSet.new(), finished_by: %{}, seq: 0, steals: 0, wasted: 0, won: %{}, reordered: 0}
   {:ok, final} = loop.(loop, state)
   if System.get_env("TURBO_DEBUG"), do: IO.puts("  registered #{inspect(Map.keys(final.workers))} results #{inspect(Enum.map(final.results, & &1.pid))}")
   best = final.results |> Enum.filter(&(&1.solutions > 0)) |> Enum.min_by(& &1.bound, fn -> nil end)
@@ -236,34 +225,47 @@ work = fn coord, guest, host_bin, budget, kind ->
     ms -> [{~c"TURBO_FRAME_MS", ~c"#{ms}"}]
   end
   port = Port.open({:spawn_executable, host_bin}, [:binary, :exit_status, {:packet, 4}, {:env, frame_env}, {:args, [guest, Integer.to_string(budget)]}])
-  loop = fn loop ->
+  # The worker is a small state machine. `held` is a job it was given and has not started: with --hold-first-job the first assignment is kept, standing for a node that
+  # is busy elsewhere, and a cancel while holding is answered for the host (the finished frame), after which the node is ready again.
+  loop = fn loop, st ->
     receive do
       {^port, {:data, "H"}} ->
         send({:turbo_coordinator, coord}, {:hello, self(), kind, hlc_send.()})
-        loop.(loop)
+        loop.(loop, st)
       {:problem, text, w} ->
         hlc_recv.(w)
         Port.command(port, "P " <> text)
-        loop.(loop)
+        loop.(loop, st)
       {:to_host, frame, w} ->
         hlc_recv.(w)
-        if String.starts_with?(frame, "S ") and System.get_env("TURBO_DIE_AT_ASSIGN") == "1" do
-          IO.puts("worker #{node()} dies on its first assignment")
-          System.halt(1)
+        assignment? = String.starts_with?(frame, "S ")
+        cond do
+          assignment? and Keyword.get(opts, :die_at_first_job, false) ->
+            IO.puts("worker #{node()} dies on its first assignment")
+            System.halt(1)
+          assignment? and Keyword.get(opts, :hold_first_job, false) and not st.spent ->
+            trace.("hold", String.slice(frame, 0, 12))
+            loop.(loop, %{st | held: frame, spent: true})
+          frame == "C" and st.held != nil ->
+            [_, _, bound] = String.split(st.held)
+            trace.("release", "cancelled while held")
+            send({:turbo_coordinator, coord}, {:from_worker, self(), "A 0 #{bound} 0 0", hlc_send.()})
+            loop.(loop, %{st | held: nil})
+          true ->
+            Port.command(port, frame)
+            loop.(loop, st)
         end
-        Port.command(port, frame)
-        loop.(loop)
       {^port, {:data, frame}} ->
         trace.("send", String.slice(frame, 0, 12))
         send({:turbo_coordinator, coord}, {:from_worker, self(), frame, hlc_send.()})
-        if String.starts_with?(frame, "R "), do: :ok, else: loop.(loop)
+        if String.starts_with?(frame, "R "), do: :ok, else: loop.(loop, st)
       {:nodedown, ^coord} ->
         System.halt(0)
       {^port, {:exit_status, code}} ->
         if code != 0, do: IO.puts("host exited with #{code}")
     end
   end
-  loop.(loop)
+  loop.(loop, %{held: nil, spent: false})
 end
 
 case role do
@@ -293,11 +295,11 @@ case role do
         budget = if throttled, do: 1_000_000, else: Keyword.get(opts, :budget, 50_000_000)
         env = [{~c"NODE_NAME", ~c"w#{k}@127.0.0.1"}, {~c"ELIXIR_ERL_OPTIONS", ~c"+fnu"}] ++
               (if throttled, do: [{~c"TURBO_SLEEP_US", ~c"#{slow_us}"}], else: []) ++
-              (if k == 2 and Keyword.get(opts, :kill_one, false), do: [{~c"TURBO_DIE_AT_ASSIGN", ~c"1"}], else: [])
+              []
         Port.open({:spawn_executable, System.find_executable("nice")},
           [:binary, :exit_status,
            {:args, ["-n", "19", System.find_executable("elixir"), Path.join(root, "tools/turbo_cluster.exs"), "worker", "coord@127.0.0.1", guest, host_bin,
-                    "--budget", Integer.to_string(budget), "--kind", kind, "--cookie", cookie] ++ (case Keyword.get(opts, :frame_ms) do nil -> []; ms -> ["--frame-ms", to_string(ms)] end)}, {:env, env}])
+                    "--budget", Integer.to_string(budget), "--kind", kind, "--cookie", cookie] ++ (if k == 2 and Keyword.get(opts, :kill_one, false), do: ["--die-at-first-job"], else: []) ++ (case Keyword.get(opts, :frame_ms) do nil -> []; ms -> ["--frame-ms", to_string(ms)] end)}, {:env, env}])
       end
     coordinate.(cp_path, Keyword.get(opts, :power, 0), length(kinds))
     for p <- ports, Port.info(p) != nil, do: Port.close(p)
