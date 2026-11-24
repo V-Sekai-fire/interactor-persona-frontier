@@ -17,7 +17,8 @@
 {opts, [cp_path], _} = OptionParser.parse(System.argv(), strict: [slice: :integer, max_load: :float, max_gpu: :integer, poll_ms: :integer, max_slices: :integer, checkpoint: :string, engine: :string, blocks: :integer, power: :integer, gpu_slice: :integer, duty: :float, save_every: :integer, fzn: :string, printer: :string])
 engine = Keyword.get(opts, :engine, "cpu")
 gpu? = engine == "gpu"
-slice = Keyword.get(opts, :slice, if(gpu?, do: 10, else: 100))
+# a slice must be long against the planner call (about 120 ms): 500 launches
+slice = Keyword.get(opts, :slice, if(gpu?, do: 500, else: 100))
 max_load = Keyword.get(opts, :max_load, 4.0)
 max_gpu = Keyword.get(opts, :max_gpu, 30)
 poll_ms = Keyword.get(opts, :poll_ms, 2000)
@@ -92,13 +93,18 @@ end
 free? = fn -> if gpu?, do: others_gpu.() < max_gpu, else: load1.() < max_load and gpu_percent.() < max_gpu end
 done? = fn -> File.read(status_file) == {:ok, "done"} end
 
-# One planner call: a problem with the observed state in a fresh database, planned from the tables.
+# One planner call: the observed state as a problem in the run's database (the schema and the domain are loaded once, before the first call), planned from the tables.
+# Every call does the same two things, import its problem and plan it, so a call costs about 120 ms; a database made afresh and migrated on every call cost about 370 ms.
+db = Path.join(scratch, "plan.sqlite")
+File.rm(db)
+File.rm(db <> "-journal")
+planner_env = [{"FRONTIER_DB", db}]
+{_, 0} = System.cmd(store_bin, ["migrate"], env: planner_env, stderr_to_stdout: true)
+{_, 0} = System.cmd(store_bin, ["import", domain], env: planner_env, stderr_to_stdout: true)
+{:ok, ticks} = Agent.start_link(fn -> 0 end)
 plan = fn free, done ->
-  db = Path.join(scratch, "plan.sqlite")
-  File.rm(db)
-  File.rm(db <> "-journal")
-  env = [{"FRONTIER_DB", db}]
-  name = "turbo_solve_#{level}_tick"
+  tick = Agent.get_and_update(ticks, fn n -> {n, n + 1} end)
+  name = "turbo_solve_#{level}_tick_#{tick}"
   problem = %{
     "@context" => %{"VSEKAI" => "https://v-sekai.org/", "domain" => "VSEKAI:planning/domain/"}, "@type" => "domain:Problem",
     "capabilities" => %{"entities" => %{}, "graph" => %{"edges" => []}}, "domain" => "turbo_solve", "name" => name,
@@ -108,9 +114,8 @@ plan = fn free, done ->
     "version" => "0.1.0"}
   problem_file = Path.join(scratch, "problem.jsonld")
   File.write!(problem_file, JSON.encode!(problem))
-  {_, 0} = System.cmd(store_bin, ["migrate"], env: env, stderr_to_stdout: true)
-  {_, 0} = System.cmd(store_bin, ["import", domain, problem_file], env: env, stderr_to_stdout: true)
-  {out, 0} = System.cmd(store_bin, ["plan", name], env: env, stderr_to_stdout: true)
+  {_, 0} = System.cmd(store_bin, ["import", problem_file], env: planner_env, stderr_to_stdout: true)
+  {out, 0} = System.cmd(store_bin, ["plan", name], env: planner_env, stderr_to_stdout: true)
   doc = JSON.decode!(out)
   if doc["reached"] != true, do: raise("the planner refused the goal: #{String.slice(out, 0, 300)}")
   Enum.map(doc["steps"], fn s -> s["action"] end)
