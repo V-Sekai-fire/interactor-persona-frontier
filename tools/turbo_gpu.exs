@@ -14,8 +14,8 @@ nvcc_env = System.get_env("CUDA_ENV", "/mnt/fire/6-datasource/turbo-build/cuda/.
 # 64 blocks and no up-front split: measured on party (3.5 s, against 1.5 s on 256) and saga (13.2 s, against 16.4 s on 256 and 30 s on one block); see docs/turbo-slang.md
 blocks = Keyword.get(opts, :blocks, 64)
 power = Keyword.get(opts, :power, 0)
-# a launch is a time budget in microseconds (a sixteenth of a 64 Hz frame), not a node count: the kernel stops it by its own clock
-launch_us = 1000
+# a launch is the duty's share of one 64 Hz frame (the same rule as the player), not a node count: the kernel stops it by its own clock
+launch_us = round(Keyword.get(opts, :duty, 100.0) / 100 * 1_000_000 / 64)
 duty = Keyword.get(opts, :duty, 100.0)
 max_gpu = Keyword.get(opts, :max_gpu, 30)
 work = Path.join(runs, "gpu-build")
