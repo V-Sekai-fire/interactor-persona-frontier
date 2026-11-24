@@ -114,6 +114,15 @@ int main(int argc, char** argv) {
     // Between launches no block is running, so work can move between blocks with plain copies. Every launch the same exchange runs: each block that has finished takes the
     // shallowest decision of a busy block whose second child is still unexplored; the busy block gets that child emptied (its next try fails at once), the idle block starts
     // from the busy block's snapshot with the decisions on the path to it applied. With no idle block, or no open decision, nothing moves.
+    // Everything in a block's store counts as changed: its list of changed variables is written as data (every variable, flag set), so the kernel needs no flag for it.
+    std::vector<int> iota_vars(n), ones_vars(n, 1);
+    for (int x = 0; x < n; ++x) iota_vars[x] = x;
+    auto mark_all_changed = [&](int b) {
+        int par = state[b * STATE + 33];
+        cuMemcpyHtoD(d_df + (size_t)b * n * sizeof(int), ones_vars.data(), n * sizeof(int));
+        cuMemcpyHtoD(d_dl + ((size_t)b * 2 * n + (size_t)par * n) * sizeof(int), iota_vars.data(), n * sizeof(int));
+        state[b * STATE + 28 + 4 * par] = n;
+    };
     const size_t dec_ints = (size_t)max_depth * 8;
     auto balance = [&]() {
         if (blocks < 2) return;
@@ -148,7 +157,8 @@ int main(int argc, char** argv) {
             dec[at * 8 + 4] = 1; dec[at * 8 + 5] = 0;
             cuMemcpyHtoD(d_dec + ((size_t)victim * dec_ints + (size_t)at * 8 + 4) * sizeof(int), empty, sizeof empty);
             int* t = &state[thief * STATE];
-            t[0] = 0; t[1] = 0; t[2] = 0; t[3] = 0; t[4] = 0; t[10] = 1; t[12] = 0; t[13] = 0; t[14] = 0; t[16] = 3; t[17] = 1; t[18] = 0; t[20] = 0; t[21] = 0; t[29] = 1;
+            t[0] = 0; t[1] = 0; t[2] = 0; t[3] = 0; t[4] = 0; t[10] = 1; t[12] = 0; t[13] = 0; t[14] = 0; t[16] = 3; t[17] = 1; t[18] = 0; t[20] = 0; t[21] = 0;
+            mark_all_changed(thief);
             handoffs++;
         }
         cuMemcpyHtoD(d_state, state.data(), state.size() * sizeof(int));
@@ -204,8 +214,8 @@ int main(int argc, char** argv) {
         fclose(f);
         if (!writing) {
             cuMemcpyDtoH(state.data(), d_state, state.size() * sizeof(int));
-            // the lists of changed variables are not in the file: the next launch propagates everything once (state slot 29 of each block)
-            for (int b = 0; b < blocks; ++b) state[b * STATE + 29] = 1;
+            // the lists of changed variables are not in the file: every variable of every block counts as changed, so the next launch propagates everything once
+            for (int b = 0; b < blocks; ++b) { state[b * STATE + 28] = state[b * STATE + 32] = 0; mark_all_changed(b); }
             cuMemcpyHtoD(d_state, state.data(), state.size() * sizeof(int));
         }
         return ok;

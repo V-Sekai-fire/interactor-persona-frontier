@@ -13,9 +13,8 @@ open LeanSlang
 
 def sNewBest := 20
 def sFound := 21
-/-- State slot 28: how many entries of the block's list of changed variables are valid. State slot 29: when non-zero, the next launch treats every variable as changed (a loaded checkpoint does not carry the lists). -/
+/-- State slot 28: how many entries of the block's list of changed variables are valid. -/
 def sDirtyN := 28
-def sResync := 29
 /-- State slot 33: parity of the list of changed variables being filled; slots 28 and 32 count the entries of list 0 and list 1. -/
 def sDirtyPar := 33
 def lanes : E := n 256
@@ -319,7 +318,6 @@ def solveCoopFn : SlangFunctionDecl :=
       .declInit int "num_subproblems" (bin "<<" (n 1) (ctl cPower)),
       leader [setState sYield (n 0), setState sSliceStart (stateAt sNodes), setState 25 (n 0), setState 26 (n 0), setState 27 clockNow, setState 30 (n 0), setState 31 (n 0), setState 34 (n 0), setState 35 (n 0)],
       sync,
-      .ifThen (ne (stateAt sResync) (n 0)) (markAllDirty ++ [leader [setState sResync (n 0)], sync]) [],
       .whileLoop (land (land (ne (stateAt sPhase) (n phaseDone)) (ne (stateAt sPhase) (n phaseAwait))) (eq (stateAt sYield) (n 0)))
         [when (eq (stateAt sPhase) (n phaseStart)) startSubproblemCoop,
          when (eq (stateAt sPhase) (n phaseDive)) (diveIterationCoop true),
