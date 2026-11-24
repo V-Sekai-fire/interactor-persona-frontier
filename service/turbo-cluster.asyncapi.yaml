@@ -67,16 +67,18 @@ components:
       summary: A worker joins.
       payload:
         type: object
-        required: [pid, kind]
+        required: [pid, kind, hlc]
         properties:
+          hlc: {type: integer, format: int64, description: "the sender's hybrid logical clock (EntityPacket/Hlc.lean): 48 bits of milliseconds since the epoch, 16 of counter; a receiver merges it into its own, and the first finish of a subproblem is the smaller stamp"}
           pid: {type: string, description: the worker process, used as the node's identity}
           kind: {type: string, enum: [cpu, gpu]}
     fromWorker:
       summary: A frame from the node's host, relayed unchanged.
       payload:
         type: object
-        required: [pid, frame]
+        required: [pid, frame, hlc]
         properties:
+          hlc: {type: integer, format: int64, description: "the sender's hybrid logical clock (EntityPacket/Hlc.lean): 48 bits of milliseconds since the epoch, 16 of counter; a receiver merges it into its own, and the first finish of a subproblem is the smaller stamp"}
           pid: {type: string}
           frame:
             type: string
@@ -89,15 +91,17 @@ components:
       summary: The problem, as the text the guest reads (a header of ten integers, the store, the bytecodes, the strategies).
       payload:
         type: object
-        required: [text]
+        required: [text, hlc]
         properties:
+          hlc: {type: integer, format: int64, description: "the sender's hybrid logical clock (EntityPacket/Hlc.lean): 48 bits of milliseconds since the epoch, 16 of counter; a receiver merges it into its own, and the first finish of a subproblem is the smaller stamp"}
           text: {type: string}
     toHost:
       summary: A frame for the host.
       payload:
         type: object
-        required: [frame]
+        required: [frame, hlc]
         properties:
+          hlc: {type: integer, format: int64, description: "the sender's hybrid logical clock (EntityPacket/Hlc.lean): 48 bits of milliseconds since the epoch, 16 of counter; a receiver merges it into its own, and the first finish of a subproblem is the smaller stamp"}
           frame:
             type: string
             description: >

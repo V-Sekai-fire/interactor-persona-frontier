@@ -13,7 +13,7 @@
 // INPUT.txt is the problem text of tools/turbo_solve.exs (header of ten integers, the store, the bytecodes, the strategies). Each launch advances every block by at most
 // SLICE_NODES nodes, so one launch is short; the host sleeps PAUSE_MS between launches. Output is the format of the CPU driver, plus launch statistics.
 // Time is a hybrid logical clock (EntityPacket/Hlc.lean: 48 bits of milliseconds, 16 of counter, one UInt64): every reply carries "hlc W", "run N W" and "status W" merge the
-// sender's stamp, so events on the player, the host and other nodes order by one clock. TURBO_TRACE=FILE appends one line per launch: "launch HLC START_NS DURATION_NS NODES".
+// sender's stamp, so events on the player, the host and other nodes order by one clock. TURBO_EVENTS=FILE appends one line per launch: "launch HLC START_NS DURATION_NS NODES".
 // A launch is shorter than the clock's millisecond, so the stamp orders it and the nanosecond fields time it.
 #include <cuda.h>
 #include <chrono>
@@ -101,7 +101,7 @@ int main(int argc, char** argv) {
 
     using clk = std::chrono::steady_clock;
     Hlc hlc;
-    FILE* trace = getenv("TURBO_TRACE") ? fopen(getenv("TURBO_TRACE"), "a") : nullptr;
+    FILE* trace = getenv("TURBO_EVENTS") ? fopen(getenv("TURBO_EVENTS"), "a") : nullptr;
     const double duty = getenv("TURBO_GPU_DUTY") ? atof(getenv("TURBO_GPU_DUTY")) : 100.0;
     auto start = clk::now();
     int launches = 0;

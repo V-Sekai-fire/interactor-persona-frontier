@@ -19,6 +19,34 @@ root = File.cwd!()
 runs = "/mnt/fire/6-datasource/turbo-runs"
 cookie = Keyword.get(opts, :cookie, "turbo_cluster")
 
+# Every message carries the sender's hybrid logical clock (EntityPacket/Hlc.lean: 48 bits of milliseconds, 16 of counter, one integer), kept per process:
+# a send stamps, a receive merges. First-finish is decided by the stamp, not by arrival, and TURBO_EVENTS=FILE appends "cluster HLC NODE EVENT DETAIL" lines
+# that tools/turbo_profile.exs merges across nodes.
+hlc_send = fn ->
+  {l0, c0} = Process.get(:hlc, {0, 0})
+  l = max(l0, System.os_time(:millisecond))
+  c = if l == l0, do: c0 + 1, else: 0
+  Process.put(:hlc, {l, c})
+  Bitwise.bor(Bitwise.bsl(l, 16), Bitwise.band(c, 0xFFFF))
+end
+hlc_recv = fn word ->
+  {l0, c0} = Process.get(:hlc, {0, 0})
+  ml = Bitwise.bsr(word, 16)
+  mc = Bitwise.band(word, 0xFFFF)
+  l = Enum.max([l0, ml, System.os_time(:millisecond)])
+  c = cond do
+    l == l0 and l == ml -> max(c0, mc) + 1
+    l == l0 -> c0 + 1
+    l == ml -> mc + 1
+    true -> 0
+  end
+  Process.put(:hlc, {l, c})
+  Bitwise.bor(Bitwise.bsl(l, 16), Bitwise.band(c, 0xFFFF))
+end
+trace = fn event, detail ->
+  if path = System.get_env("TURBO_EVENTS"), do: File.write!(path, "cluster #{hlc_send.()} #{node()} #{event} #{detail}\n", [:append])
+end
+
 problem_text = fn cp_path, power ->
   {out, 0} = System.cmd("elixir", [Path.join(root, "tools/turbo_solve.exs"), cp_path, "--prepare", "--power", Integer.to_string(power)], env: [{"ELIXIR_ERL_OPTIONS", "+fnu"}])
   dir = out |> String.split("\n", trim: true) |> List.last()
@@ -49,7 +77,7 @@ coordinate = fn cp_path, power, wanted ->
   end
   share = fn st, from, bound ->
     if bound < st.bound do
-      for {pid, _} <- st.workers, pid != from, do: send(pid, {:to_host, "B #{bound}"})
+      for {pid, _} <- st.workers, pid != from, do: send(pid, {:to_host, "B #{bound}", hlc_send.()})
       %{st | bound: bound}
     else
       st
@@ -85,25 +113,30 @@ coordinate = fn cp_path, power, wanted ->
 
   assign = fn st, pid, job ->
     if System.get_env("TURBO_DEBUG"), do: IO.puts("  -> S #{job} to #{inspect(pid)}")
-    send(pid, {:to_host, "S #{job} #{st.bound}"})
+    send(pid, {:to_host, "S #{job} #{st.bound}", hlc_send.()})
+    trace.("assign", "job=#{job} to=#{inspect(pid)}")
     w = Map.fetch!(st.workers, pid)
     %{st | workers: Map.put(st.workers, pid, %{w | job: job, since: now.(), nodes_at_start: Map.get(st.nodes, pid, 0)})}
   end
 
   loop = fn loop, st ->
     receive do
-      {:hello, pid, kind} ->
+      {:hello, pid, kind, w} ->
+        hlc_recv.(w)
+        trace.("hello", "from=#{inspect(pid)} kind=#{kind}")
         Process.monitor(pid)
-        send(pid, {:problem, text})
+        send(pid, {:problem, text, hlc_send.()})
         st = %{st | alive: MapSet.put(st.alive, pid)}
         st = put_in(st.workers[pid], %{kind: kind, job: nil, since: now.(), rate: nil, nodes_at_start: 0, done_jobs: 0})
         st = if map_size(st.workers) >= wanted and not st.started, do: wake.(%{st | started: true, parked: st.parked ++ st.pending, pending: []}), else: st
         loop.(loop, st)
-      {:from_worker, pid, <<"U ", rest::binary>>} ->
+      {:from_worker, pid, <<"U ", rest::binary>>, w} ->
+        hlc_recv.(w)
         loop.(loop, share.(st, pid, String.to_integer(rest)))
-      {:from_worker, _pid, <<"A ", _::binary>>} = message when not st.started ->
+      {:from_worker, _pid, <<"A ", _::binary>>, _w} = message when not st.started ->
         loop.(loop, %{st | pending: [message | st.pending]})
-      {:from_worker, pid, <<"A ", rest::binary>>} = message ->
+      {:from_worker, pid, <<"A ", rest::binary>>, w_hlc} = message ->
+        hlc_recv.(w_hlc)
         [skip, bound, solutions, nodes] = rest |> String.split() |> Enum.map(&String.to_integer/1)
         st = share.(st, pid, bound)
         w = Map.fetch!(st.workers, pid)
@@ -111,12 +144,24 @@ coordinate = fn cp_path, power, wanted ->
         st =
           if w.job != nil and not MapSet.member?(st.done, w.job) do
             others = runners.(st, w.job) -- [pid]
-            for other <- others, do: send(other, {:to_host, "C"})
+            for other <- others, do: send(other, {:to_host, "C", hlc_send.()})
             if others != [], do: IO.puts("subproblem #{w.job} finished by #{inspect(pid)} first; #{length(others)} copy cancelled")
+            trace.("finish", "job=#{w.job} by=#{inspect(pid)} stamp=#{w_hlc}")
             %{st | done: MapSet.put(st.done, w.job), finished_by: Map.update(st.finished_by, pid, 1, &(&1 + 1)),
-                   next: max(st.next, skip)}
+                   won: Map.put(st.won, w.job, {w_hlc, pid}), next: max(st.next, skip)}
           else
-            if w.job != nil, do: %{st | wasted: st.wasted + 1}, else: %{st | next: max(st.next, skip)}
+            if w.job != nil do
+              # a copy that arrived later may have finished earlier: the smaller stamp wins
+              case Map.get(st.won, w.job) do
+                {first, loser} when w_hlc < first ->
+                  trace.("reorder", "job=#{w.job} first=#{inspect(pid)} arrived after #{inspect(loser)}")
+                  fb = st.finished_by |> Map.update(loser, 0, &max(&1 - 1, 0)) |> Map.update(pid, 1, &(&1 + 1))
+                  %{st | wasted: st.wasted + 1, finished_by: fb, won: Map.put(st.won, w.job, {w_hlc, pid}), reordered: st.reordered + 1}
+                _ -> %{st | wasted: st.wasted + 1}
+              end
+            else
+              %{st | next: max(st.next, skip)}
+            end
           end
         elapsed = max(now.() - w.since, 1)
         rate = if w.job != nil and nodes > w.nodes_at_start, do: (nodes - w.nodes_at_start) * 1000 / elapsed, else: w.rate
@@ -129,16 +174,18 @@ coordinate = fn cp_path, power, wanted ->
             loop.(loop, assign.(st, pid, job))
           (stolen = victim.(st, pid)) != nil ->
             {slow, slow_w} = stolen
+            trace.("steal", "thief=#{inspect(pid)} victim=#{inspect(slow)} job=#{slow_w.job}")
             IO.puts("#{inspect(pid)} (#{Map.fetch!(st.workers, pid).kind}) presumes #{inspect(slow)} (#{slow_w.kind}) dead for subproblem #{slow_w.job} and redoes it")
             loop.(loop, assign.(%{st | steals: st.steals + 1}, pid, slow_w.job))
           live_jobs.(st, pid) != [] ->
             loop.(loop, %{st | parked: [message | st.parked]})
           true ->
             if System.get_env("TURBO_DEBUG"), do: IO.puts("  -> D to #{inspect(pid)}")
-            send(pid, {:to_host, "D"})
+            send(pid, {:to_host, "D", hlc_send.()})
             loop.(loop, wake.(st))
         end
-      {:from_worker, pid, <<"R ", rest::binary>>} ->
+      {:from_worker, pid, <<"R ", rest::binary>>, w} ->
+        hlc_recv.(w)
         [head | rows] = String.split(rest, "\n", trim: true)
         [nodes, fails, solutions, bound, depth, exhaustive] = head |> String.split() |> Enum.map(&String.to_integer/1)
         result = %{pid: pid, kind: Map.fetch!(st.workers, pid).kind, nodes: nodes, fails: fails, solutions: solutions, bound: bound, depth: depth, exhaustive: exhaustive, store: rows}
@@ -161,11 +208,11 @@ coordinate = fn cp_path, power, wanted ->
     end
   end
   state = %{workers: %{}, next: 0, bound: 2_147_483_647, retry: [], solutions: %{}, nodes: %{}, results: [], pending: [], parked: [], started: false, alive: MapSet.new(),
-            done: MapSet.new(), finished_by: %{}, steals: 0, wasted: 0}
+            done: MapSet.new(), finished_by: %{}, steals: 0, wasted: 0, won: %{}, reordered: 0}
   {:ok, final} = loop.(loop, state)
   if System.get_env("TURBO_DEBUG"), do: IO.puts("  registered #{inspect(Map.keys(final.workers))} results #{inspect(Enum.map(final.results, & &1.pid))}")
   best = final.results |> Enum.filter(&(&1.solutions > 0)) |> Enum.min_by(& &1.bound, fn -> nil end)
-  IO.puts("done in #{now.() - started} ms on #{length(final.results)} node(s) of #{wanted} started (#{map_size(final.workers)} registered); #{final.steals} steal(s), #{MapSet.size(final.done)} of #{total} subproblems done, #{final.wasted} redone copies discarded")
+  IO.puts("done in #{now.() - started} ms on #{length(final.results)} node(s) of #{wanted} started (#{map_size(final.workers)} registered); #{final.steals} steal(s), #{MapSet.size(final.done)} of #{total} subproblems done, #{final.wasted} redone copies discarded, #{final.reordered} finish(es) reordered by their stamps")
   for r <- Enum.sort_by(final.results, &{&1.kind, -&1.nodes}),
       do: IO.puts("  #{r.kind} node: #{Map.get(final.finished_by, r.pid, 0)} subproblems, nodes #{r.nodes} fails #{r.fails} solutions #{r.solutions} bound #{r.bound} exhaustive #{r.exhaustive}")
   IO.puts("total nodes #{Enum.sum(Enum.map(final.results, & &1.nodes))} solutions #{Enum.sum(Enum.map(final.results, & &1.solutions))}")
@@ -188,12 +235,14 @@ work = fn coord, guest, host_bin, budget, kind ->
   loop = fn loop ->
     receive do
       {^port, {:data, "H"}} ->
-        send({:turbo_coordinator, coord}, {:hello, self(), kind})
+        send({:turbo_coordinator, coord}, {:hello, self(), kind, hlc_send.()})
         loop.(loop)
-      {:problem, text} ->
+      {:problem, text, w} ->
+        hlc_recv.(w)
         Port.command(port, "P " <> text)
         loop.(loop)
-      {:to_host, frame} ->
+      {:to_host, frame, w} ->
+        hlc_recv.(w)
         if String.starts_with?(frame, "S ") and System.get_env("TURBO_DIE_AT_ASSIGN") == "1" do
           IO.puts("worker #{node()} dies on its first assignment")
           System.halt(1)
@@ -201,7 +250,8 @@ work = fn coord, guest, host_bin, budget, kind ->
         Port.command(port, frame)
         loop.(loop)
       {^port, {:data, frame}} ->
-        send({:turbo_coordinator, coord}, {:from_worker, self(), frame})
+        trace.("send", String.slice(frame, 0, 12))
+        send({:turbo_coordinator, coord}, {:from_worker, self(), frame, hlc_send.()})
         if String.starts_with?(frame, "R "), do: :ok, else: loop.(loop)
       {:nodedown, ^coord} ->
         System.halt(0)

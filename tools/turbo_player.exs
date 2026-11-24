@@ -11,7 +11,7 @@
 # Usage: elixir tools/turbo_player.exs <level.cp> [--slice NODES] [--max-load L] [--max-gpu PERCENT] [--poll-ms MS] [--max-slices N] [--checkpoint FILE]
 #   the level is the file's base name: scout, party or saga (the enumeration `level` of the domain).
 # --fzn FILE (the level's FlatZinc) with --printer (the frontier_frontend binary, default .lake/build/bin/frontier_frontend: Lean port of Turbo's preprocessing and solver output) writes the solution in MiniZinc format to solution.mzn in the scratch folder at the end.
-# Time is the entity packet's hybrid logical clock (48 bits of milliseconds, 16 of counter): commands to the GPU host carry the player's stamp, replies carry the host's, and with TURBO_TRACE=FILE
+# Time is the entity packet's hybrid logical clock (48 bits of milliseconds, 16 of counter): commands to the GPU host carry the player's stamp, replies carry the host's, and with TURBO_EVENTS=FILE
 # each slice appends "slice HLC PLAN_MS RUN_MS" to the host's launch lines, so tools/turbo_profile.exs can order them and split planner time from GPU time.
 # Free means the one-minute load average is under --max-load (default 4, the host has 8 threads) and the GPU is under --max-gpu percent busy (default 30).
 {opts, [cp_path], _} = OptionParser.parse(System.argv(), strict: [slice: :integer, max_load: :float, max_gpu: :integer, poll_ms: :integer, max_slices: :integer, checkpoint: :string, engine: :string, blocks: :integer, power: :integer, gpu_slice: :integer, duty: :float, save_every: :integer, fzn: :string, printer: :string])
@@ -78,7 +78,7 @@ hlc_recv = fn word ->
     {l, c}
   end)
 end
-trace = fn line -> if (path = System.get_env("TURBO_TRACE")), do: File.write!(path, line <> "\n", [:append]) end
+trace = fn line -> if (path = System.get_env("TURBO_EVENTS")), do: File.write!(path, line <> "\n", [:append]) end
 
 # The GPU reading includes this process's own launches: subtract its share of the time since the last reading.
 others_gpu = fn ->
