@@ -106,10 +106,53 @@ int main(int argc, char** argv) {
     auto start = clk::now();
     int launches = 0;
     double max_ms = 0, sum_ms = 0;
+    long handoffs = 0;
     double deductions = 0, rounds = 0, build_ticks = 0, run_ticks = 0;
     double prop_ticks = 0, launch_ticks = 0; // device clock ticks in propagation and in whole launches (kernel slots 25 and 26 of each block's state)
         bool done = false;
     int last_approx = INT_MAX;
+    // Between launches no block is running, so work can move between blocks with plain copies. Every launch the same exchange runs: each block that has finished takes the
+    // shallowest decision of a busy block whose second child is still unexplored; the busy block gets that child emptied (its next try fails at once), the idle block starts
+    // from the busy block's snapshot with the decisions on the path to it applied. With no idle block, or no open decision, nothing moves.
+    const size_t dec_ints = (size_t)max_depth * 8;
+    auto balance = [&]() {
+        if (blocks < 2) return;
+        std::vector<int> idle;
+        for (int b = 0; b < blocks; ++b) if (state[b * STATE + 16] == 5) idle.push_back(b);
+        if (idle.empty()) return;
+        std::vector<std::vector<int>> cache(blocks);
+        auto open_depth = [&](int v) -> int {
+            if (state[v * STATE + 16] != 3 || state[v * STATE + 17] == 0 || state[v * STATE + 0] <= 0) return -1;
+            if (cache[v].empty()) {
+                cache[v].resize((size_t)state[v * STATE + 0] * 8);
+                cuMemcpyDtoH(cache[v].data(), d_dec + (size_t)v * dec_ints * sizeof(int), cache[v].size() * sizeof(int));
+            }
+            for (int i = 0; i < state[v * STATE + 0]; ++i) if (cache[v][i * 8 + 1] == 0 && cache[v][i * 8 + 4] <= cache[v][i * 8 + 5]) return i;
+            return -1;
+        };
+        std::vector<int> lo(n), hi(n);
+        for (int thief : idle) {
+            int victim = -1, at = INT_MAX;
+            for (int v = 0; v < blocks; ++v) { int i = open_depth(v); if (i >= 0 && i < at) { at = i; victim = v; } }
+            if (victim < 0) break;
+            std::vector<int>& dec = cache[victim];
+            cuMemcpyDtoH(lo.data(), d_sl + (size_t)victim * n * sizeof(int), n * sizeof(int));
+            cuMemcpyDtoH(hi.data(), d_su + (size_t)victim * n * sizeof(int), n * sizeof(int));
+            for (int k = 0; k <= at; ++k) {
+                int c = k == at ? 1 : dec[k * 8 + 1], var = dec[k * 8];
+                lo[var] = std::max(lo[var], dec[k * 8 + 2 + 2 * c]); hi[var] = std::min(hi[var], dec[k * 8 + 3 + 2 * c]);
+            }
+            cuMemcpyHtoD(d_lower + (size_t)thief * n * sizeof(int), lo.data(), n * sizeof(int));
+            cuMemcpyHtoD(d_upper + (size_t)thief * n * sizeof(int), hi.data(), n * sizeof(int));
+            int empty[2] = {1, 0};
+            dec[at * 8 + 4] = 1; dec[at * 8 + 5] = 0;
+            cuMemcpyHtoD(d_dec + ((size_t)victim * dec_ints + (size_t)at * 8 + 4) * sizeof(int), empty, sizeof empty);
+            int* t = &state[thief * STATE];
+            t[0] = 0; t[1] = 0; t[2] = 0; t[3] = 0; t[4] = 0; t[10] = 1; t[12] = 0; t[13] = 0; t[14] = 0; t[16] = 3; t[17] = 1; t[18] = 0; t[20] = 0; t[21] = 0; t[29] = 1;
+            handoffs++;
+        }
+        cuMemcpyHtoD(d_state, state.data(), state.size() * sizeof(int));
+    };
     auto step = [&](int max_this_call) -> int {
         int did = 0;
         while (!done && did < max_this_call) {
@@ -119,6 +162,7 @@ int main(int argc, char** argv) {
             launches++; did++; sum_ms += ms; if (ms > max_ms) max_ms = ms;
             unsigned long long stamp = hlc.send();
             cuMemcpyDtoH(state.data(), d_state, state.size() * sizeof(int));
+            balance();
             for (int b = 0; b < blocks; ++b) { prop_ticks += (unsigned)state[b * STATE + 25]; launch_ticks += (unsigned)state[b * STATE + 26]; deductions += state[b * STATE + 30]; rounds += state[b * STATE + 31]; build_ticks += (unsigned)state[b * STATE + 34]; run_ticks += (unsigned)state[b * STATE + 35]; }
             done = true;
             int finished = 0;
@@ -187,6 +231,7 @@ int main(int argc, char** argv) {
     double wall = std::chrono::duration<double, std::milli>(clk::now() - start).count();
     CHECK(cuMemcpyDtoH(control.data(), d_ctl, control.size() * sizeof(int)));
     printf("gpu launches %d wall %.1f ms mean %.3f ms max %.3f ms\n", launches, wall, sum_ms / std::max(launches, 1), max_ms);
+    if (handoffs > 0) printf("handoffs between blocks %ld\n", handoffs);
     if (rounds > 0) printf("propagation rounds %.0f, propagators run %.0f (%.1f per round)\n", rounds, deductions, deductions / rounds);
     if (rounds > 0) printf("per round: build %.1f us-ticks, run %.1f (sixteenths of device clock ticks)\n", build_ticks / rounds, run_ticks / rounds);
     if (launch_ticks > 0) printf("kernel clock: propagation %.1f percent of the launch (%.0f of %.0f ticks, in sixteenths)\n", 100.0 * prop_ticks / launch_ticks, prop_ticks, launch_ticks);
