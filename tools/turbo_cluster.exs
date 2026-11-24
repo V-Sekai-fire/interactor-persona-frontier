@@ -22,30 +22,37 @@ cookie = Keyword.get(opts, :cookie, "turbo_cluster")
 # Every message carries the sender's hybrid logical clock (EntityPacket/Hlc.lean: 48 bits of milliseconds, 16 of counter, one integer), kept per process:
 # a send stamps, a receive merges. First-finish is decided by the stamp, not by arrival, and TURBO_EVENTS=FILE appends "cluster HLC NODE EVENT DETAIL" lines
 # that tools/turbo_profile.exs merges across nodes.
-hlc_send = fn ->
-  {l0, c0} = Process.get(:hlc, {0, 0})
-  l = max(l0, System.os_time(:millisecond))
-  c = if l == l0, do: c0 + 1, else: 0
-  Process.put(:hlc, {l, c})
-  Bitwise.bor(Bitwise.bsl(l, 16), Bitwise.band(c, 0xFFFF))
-end
-hlc_recv = fn word ->
-  {l0, c0} = Process.get(:hlc, {0, 0})
-  ml = Bitwise.bsr(word, 16)
-  mc = Bitwise.band(word, 0xFFFF)
-  l = Enum.max([l0, ml, System.os_time(:millisecond)])
-  c = cond do
-    l == l0 and l == ml -> max(c0, mc) + 1
-    l == l0 -> c0 + 1
-    l == ml -> mc + 1
-    true -> 0
+defmodule Turbo.Hlc do
+  @moduledoc false
+  # The clock of this process: (milliseconds << 16) | counter, kept in the process dictionary.
+  def send do
+    {l0, c0} = Process.get(:hlc, {0, 0})
+    l = max(l0, System.os_time(:millisecond))
+    c = if l == l0, do: c0 + 1, else: 0
+    Process.put(:hlc, {l, c})
+    Bitwise.bor(Bitwise.bsl(l, 16), Bitwise.band(c, 0xFFFF))
   end
-  Process.put(:hlc, {l, c})
-  Bitwise.bor(Bitwise.bsl(l, 16), Bitwise.band(c, 0xFFFF))
+  def recv(word) do
+    {l0, c0} = Process.get(:hlc, {0, 0})
+    ml = Bitwise.bsr(word, 16)
+    mc = Bitwise.band(word, 0xFFFF)
+    l = Enum.max([l0, ml, System.os_time(:millisecond)])
+    c = cond do
+      l == l0 and l == ml -> max(c0, mc) + 1
+      l == l0 -> c0 + 1
+      l == ml -> mc + 1
+      true -> 0
+    end
+    Process.put(:hlc, {l, c})
+    Bitwise.bor(Bitwise.bsl(l, 16), Bitwise.band(c, 0xFFFF))
+  end
+  def trace(event, detail) do
+    if path = System.get_env("TURBO_EVENTS"), do: File.write!(path, "cluster #{__MODULE__.send()} #{node()} #{event} #{detail}\n", [:append])
+  end
 end
-trace = fn event, detail ->
-  if path = System.get_env("TURBO_EVENTS"), do: File.write!(path, "cluster #{hlc_send.()} #{node()} #{event} #{detail}\n", [:append])
-end
+hlc_send = &Turbo.Hlc.send/0
+hlc_recv = &Turbo.Hlc.recv/1
+trace = &Turbo.Hlc.trace/2
 
 problem_text = fn cp_path, power ->
   {out, 0} = System.cmd("elixir", [Path.join(root, "tools/turbo_solve.exs"), cp_path, "--prepare", "--power", Integer.to_string(power)], env: [{"ELIXIR_ERL_OPTIONS", "+fnu"}])
@@ -217,55 +224,89 @@ coordinate = fn cp_path, power, wanted ->
   end
 end
 
+# The worker is a gen_statem with two states. In `ready` frames go through to the guest host. With --hold-first-job the first assignment is kept instead (the node is busy
+# elsewhere) and the worker is `held`: it answers a cancel for the host with the finished frame and is ready again; every other frame still goes through.
+defmodule Turbo.Worker do
+  @moduledoc false
+  @behaviour :gen_statem
+
+  def start(args), do: :gen_statem.start_link(__MODULE__, args, [])
+
+  @impl true
+  def callback_mode, do: :state_functions
+
+  @impl true
+  def init(%{coord: coord, guest: guest, host: host, budget: budget, frame_env: frame_env} = args) do
+    true = Node.connect(coord)
+    Node.monitor(coord, true)
+    port = Port.open({:spawn_executable, host}, [:binary, :exit_status, {:packet, 4}, {:env, frame_env}, {:args, [guest, Integer.to_string(budget)]}])
+    {:ok, :ready, Map.merge(args, %{port: port, held: nil, spent: false})}
+  end
+
+  def ready(:info, {:to_host, frame, w}, data) do
+    Turbo.Hlc.recv(w)
+    assignment? = String.starts_with?(frame, "S ")
+    cond do
+      assignment? and data.die_first ->
+        IO.puts("worker #{node()} dies on its first assignment")
+        System.halt(1)
+      assignment? and data.hold_first and not data.spent ->
+        Turbo.Hlc.trace("hold", String.slice(frame, 0, 12))
+        {:next_state, :held, %{data | held: frame, spent: true}}
+      true ->
+        Port.command(data.port, frame)
+        :keep_state_and_data
+    end
+  end
+  def ready(:info, event, data), do: common(event, data)
+
+  def held(:info, {:to_host, "C", w}, data) do
+    Turbo.Hlc.recv(w)
+    [_, _, bound] = String.split(data.held)
+    Turbo.Hlc.trace("release", "cancelled while held")
+    send({:turbo_coordinator, data.coord}, {:from_worker, self(), "A 0 #{bound} 0 0", Turbo.Hlc.send()})
+    {:next_state, :ready, %{data | held: nil}}
+  end
+  def held(:info, {:to_host, frame, w}, data) do
+    Turbo.Hlc.recv(w)
+    Port.command(data.port, frame)
+    :keep_state_and_data
+  end
+  def held(:info, event, data), do: common(event, data)
+
+  defp common({port, {:data, "H"}}, %{port: port} = data) do
+    send({:turbo_coordinator, data.coord}, {:hello, self(), data.kind, Turbo.Hlc.send()})
+    :keep_state_and_data
+  end
+  defp common({:problem, text, w}, data) do
+    Turbo.Hlc.recv(w)
+    Port.command(data.port, "P " <> text)
+    :keep_state_and_data
+  end
+  defp common({port, {:data, frame}}, %{port: port} = data) do
+    Turbo.Hlc.trace("send", String.slice(frame, 0, 12))
+    send({:turbo_coordinator, data.coord}, {:from_worker, self(), frame, Turbo.Hlc.send()})
+    if String.starts_with?(frame, "R "), do: {:stop, :normal}, else: :keep_state_and_data
+  end
+  defp common({:nodedown, coord}, %{coord: coord}), do: System.halt(0)
+  defp common({port, {:exit_status, code}}, %{port: port}) do
+    if code != 0, do: IO.puts("host exited with #{code}")
+    {:stop, :normal}
+  end
+  defp common(_other, _data), do: :keep_state_and_data
+end
+
 work = fn coord, guest, host_bin, budget, kind ->
-  true = Node.connect(coord)
-  Node.monitor(coord, true)
   frame_env = case Keyword.get(opts, :frame_ms) do
     nil -> []
     ms -> [{~c"TURBO_FRAME_MS", ~c"#{ms}"}]
   end
-  port = Port.open({:spawn_executable, host_bin}, [:binary, :exit_status, {:packet, 4}, {:env, frame_env}, {:args, [guest, Integer.to_string(budget)]}])
-  # The worker is a small state machine. `held` is a job it was given and has not started: with --hold-first-job the first assignment is kept, standing for a node that
-  # is busy elsewhere, and a cancel while holding is answered for the host (the finished frame), after which the node is ready again.
-  loop = fn loop, st ->
-    receive do
-      {^port, {:data, "H"}} ->
-        send({:turbo_coordinator, coord}, {:hello, self(), kind, hlc_send.()})
-        loop.(loop, st)
-      {:problem, text, w} ->
-        hlc_recv.(w)
-        Port.command(port, "P " <> text)
-        loop.(loop, st)
-      {:to_host, frame, w} ->
-        hlc_recv.(w)
-        assignment? = String.starts_with?(frame, "S ")
-        cond do
-          assignment? and Keyword.get(opts, :die_at_first_job, false) ->
-            IO.puts("worker #{node()} dies on its first assignment")
-            System.halt(1)
-          assignment? and Keyword.get(opts, :hold_first_job, false) and not st.spent ->
-            trace.("hold", String.slice(frame, 0, 12))
-            loop.(loop, %{st | held: frame, spent: true})
-          frame == "C" and st.held != nil ->
-            [_, _, bound] = String.split(st.held)
-            trace.("release", "cancelled while held")
-            send({:turbo_coordinator, coord}, {:from_worker, self(), "A 0 #{bound} 0 0", hlc_send.()})
-            loop.(loop, %{st | held: nil})
-          true ->
-            Port.command(port, frame)
-            loop.(loop, st)
-        end
-      {^port, {:data, frame}} ->
-        trace.("send", String.slice(frame, 0, 12))
-        send({:turbo_coordinator, coord}, {:from_worker, self(), frame, hlc_send.()})
-        if String.starts_with?(frame, "R "), do: :ok, else: loop.(loop, st)
-      {:nodedown, ^coord} ->
-        System.halt(0)
-      {^port, {:exit_status, code}} ->
-        if code != 0, do: IO.puts("host exited with #{code}")
-    end
+  {:ok, pid} = Turbo.Worker.start(%{coord: coord, guest: guest, host: host_bin, budget: budget, frame_env: frame_env, kind: kind,
+                                   hold_first: Keyword.get(opts, :hold_first_job, false), die_first: Keyword.get(opts, :die_at_first_job, false)})
+  ref = Process.monitor(pid)
+  receive do
+    {:DOWN, ^ref, :process, ^pid, _} -> :ok
   end
-  loop.(loop, %{held: nil, spent: false})
 end
 
 case role do
