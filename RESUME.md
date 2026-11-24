@@ -34,3 +34,4 @@ its C++ target rejects buffer atomics. `tools/party_saga.exs dump TRACK G SEED O
 - Unread sources: the original lazy clause generation papers, Shaw 1998, the Chu thesis, the Springer retrospective.
 - 2026-11-24: slang/turbo/pir.slang copies pir.hpp; entry-point compile fails on recursion in den_fdiv/den_cdiv (E55201). Next: unroll to depth two, then run probe.slang on cpp against Turbo values.
 - 2026-11-24: Turbo propagator now written in Lean with contract-lean-slang (turbo/Turbo/Pir.lean, lake build turbo_emit); ADD slice compiles on spirv/cpp/cuda. Next: port ask/deduce for the remaining operators, keep the den_* call tree small, compare against slang/turbo/pir.slang.
+- 2026-11-24: Lean module now has ask/deduce for every operator; emitted text compiles for cpp and cuda (spirv not rechecked). CI fetches the Slang SDK with tools/slang_vendor.exs. Next: run the cpp output against pir.slang on sample intervals.

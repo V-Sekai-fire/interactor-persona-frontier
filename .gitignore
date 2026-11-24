@@ -11,3 +11,4 @@ frontier.sqlite
 /priv/
 /mix.lock.bak
 entities/fixtures/minizinc/party-saga/run.log
+.slang/

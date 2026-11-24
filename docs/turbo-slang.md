@@ -54,8 +54,7 @@ Departures so far: `deduce` writes into the three intervals with `meet` instead 
 The propagator is written in Lean with https://github.com/V-Sekai-fire/contract-lean-slang (MIT, pinned in `lakefile.lean` at `01dbd39`) and
 printed as Slang, not kept as hand-written `.slang`. `turbo/Turbo/Pir.lean` builds the `SlangShaderModule`; `lake build turbo_emit` then
 `.lake/build/bin/turbo_emit` prints it. First slice: the division helpers, `Itv`, and `ADD` (`ask`, `deduce`); the emitted text compiles with
-`slangc` for spirv, cpp and cuda. Needs the Slang SDK under the dependency's `vendor/` (its `extern_lib` fails to build without `slang.h`);
-here `.lake/packages/LeanSlang/vendor/{include,lib}` link to the unpacked 2026.20 SDK, and `vendor/fetch.sh` there does the same download.
+`slangc` for spirv, cpp and cuda. The dependency's `extern_lib` needs `slang.h` under its `vendor/`; its `vendor/fetch.sh` is not run by CI, so `elixir tools/slang_vendor.exs` (after `lake resolve-deps`) unpacks Slang 2026.20 into `.slang/` and links it there. `.github/workflows/node.yml` runs both before `lake build`.
 Limits of the Lean AST met so far: no `switch` (use `if` chains), only `uint` literals (write `int(1u)`), no static members (use free functions), no macros.
 ## Recursion, unrolled in the hand-written copy (`slang/turbo/pir.slang`, `den_levels.slang`)
 `den_fdiv` and `den_cdiv` are three levels deep in `den_levels.slang`; `den_tdiv` calls `den_tdiv_zero` instead of itself. With the entry point
