@@ -24,6 +24,8 @@ def cNextSubproblem := 10
 def cApproxBest := 11
 def cError := 12
 def cSliceNodes := 13
+def cExternal := 14
+def cCancel := 15
 -- per-block state
 def sDepth := 0
 def sStrategy := 1
@@ -51,6 +53,7 @@ def phaseDive := 2
 def phaseSearch := 3
 def phaseNext := 4
 def phaseDone := 5
+def phaseAwait := 6
 
 def ctl (k : Nat) : E := .index (v "control") (.litUint k)
 def stateAt (k : Nat) : E := .index (v "state") (add (mul (v "b") (n 24)) (n k))
@@ -310,9 +313,10 @@ def sliceCheck : S :=
   when (land (gt (ctl cSliceNodes) (n 0)) (ge (sub (stateAt sNodes) (stateAt sSliceStart)) (ctl cSliceNodes)))
     [setState sYield (n 1)]
 
+/-- With `control[14]` set, the block waits in `phaseAwait` for a coordinator to assign its next subproblem, so blocks can run in separate guests on separate machines. -/
 def initBlock : List S :=
   [setState sBestBound infinity, setState sExhaustive (n 1), setState sSubproblem (v "b"), setState sStop (n 0),
-   setState sPhase (n phaseStart)]
+   .ifThen (ne (ctl cExternal) (n 0)) [setState sPhase (n phaseAwait)] [setState sPhase (n phaseStart)]]
 
 def startSubproblem : List S :=
   [.ifThen (ge (stateAt sSubproblem) (v "num_subproblems"))
@@ -321,9 +325,13 @@ def startSubproblem : List S :=
       copyStore "root_lower" "root_upper" "lower" "upper" zeroBase blockBase,
       setState sRemaining (ctl cPower), setState sLeaf (n 0), setState sPhase (n phaseDive)]]
 
+/-- The coordinator cancels the subproblem in hand (another node finished it first): drop it and wait for the next one. -/
+def cancelCheck : S :=
+  when (ne (ctl cCancel) (n 0)) [.assign (ctl cCancel) (n 0), setState sInner (n 0), setState sLeaf (n 1), setState sRemaining (n 0), setState sPhase (n phaseNext)]
+
 /-- One iteration of the dive, or the end of it: sections D and E of the source. -/
 def diveIteration : List S :=
-  [.ifThen (land (land (gt (stateAt sRemaining) (n 0)) (eq (stateAt sLeaf) (n 0))) (eq (stateAt sStop) (n 0)))
+  [cancelCheck, .ifThen (land (land (gt (stateAt sRemaining) (n 0)) (eq (stateAt sLeaf) (n 0))) (eq (stateAt sStop) (n 0)))
      (diveStep ++ [sliceCheck])
      [.ifThen (land (eq (stateAt sLeaf) (n 1)) (eq (stateAt sStop) (n 0)))
         [.declInit int "skip_to" (bin "<<" (add (bin ">>" (stateAt sSubproblem) (stateAt sRemaining)) (n 1)) (stateAt sRemaining)),
@@ -335,14 +343,16 @@ def diveIteration : List S :=
 
 /-- One iteration of the search loop of section F. -/
 def searchIteration : List S :=
-  [.ifThen (land (ne (stateAt sInner) (n 0)) (eq (stateAt sStop) (n 0)))
+  [cancelCheck, .ifThen (land (ne (stateAt sInner) (n 0)) (eq (stateAt sStop) (n 0)))
      (solveStep ++ [sliceCheck])
      [setState sPhase (n phaseNext)]]
 
 def nextSubproblem : List S :=
   [.ifThen (eq (stateAt sStop) (n 0))
-     [setState sSubproblem (ctl cNextSubproblem), .assign (ctl cNextSubproblem) (add (ctl cNextSubproblem) (n 1)),
-      setState sPhase (n phaseStart)]
+     [.ifThen (ne (ctl cExternal) (n 0))
+        [setState sPhase (n phaseAwait)]
+        [setState sSubproblem (ctl cNextSubproblem), .assign (ctl cNextSubproblem) (add (ctl cNextSubproblem) (n 1)),
+         setState sPhase (n phaseStart)]]
      [setState sPhase (n phaseDone)]]
 
 /-- The block loop of the source as a state machine over `state[b][phase]`, so a slice can stop after any iteration and the next call resumes. -/
@@ -354,7 +364,7 @@ def solveFn : SlangFunctionDecl :=
       when (eq (stateAt sPhase) (n 0)) initBlock,
       .declInit int "num_subproblems" (bin "<<" (n 1) (ctl cPower)),
       setState sYield (n 0), setState sSliceStart (stateAt sNodes),
-      .whileLoop (land (ne (stateAt sPhase) (n phaseDone)) (eq (stateAt sYield) (n 0)))
+      .whileLoop (land (land (ne (stateAt sPhase) (n phaseDone)) (ne (stateAt sPhase) (n phaseAwait))) (eq (stateAt sYield) (n 0)))
         [when (eq (stateAt sPhase) (n phaseStart)) startSubproblem,
          when (eq (stateAt sPhase) (n phaseDive)) diveIteration,
          when (eq (stateAt sPhase) (n phaseSearch)) searchIteration,

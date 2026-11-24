@@ -1,0 +1,112 @@
+asyncapi: 3.1.0
+info:
+  title: Turbo cluster
+  version: 0.1.0
+  description: >
+    Distributed solving of one constraint problem. A coordinator node hands out subproblems (the search is split into 2^power of them) and shares the best
+    objective bound; worker nodes each run the solver guest ELF under libriscv and report. Nodes are Erlang nodes joined with a shared cookie, so a worker can run
+    on another machine. A node says whether it is a cpu or a gpu node and the coordinator measures its speed; an idle node takes a subproblem from a clearly slower
+    node by presuming that node dead for it, and whichever copy finishes first wins. The same path recovers a node that really dies. Between a worker node and its
+    libriscv host the frames are length-prefixed (four bytes, big endian) on standard input and output.
+  license:
+    name: MIT
+servers:
+  cluster:
+    host: coordinator.node:4369
+    protocol: erlang-distribution
+    description: Erlang distribution (epmd on 4369 and the node's own port); the cookie authenticates the nodes. The coordinator registers the name turbo_coordinator.
+channels:
+  coordinator:
+    address: turbo_coordinator
+    messages:
+      hello:
+        $ref: '#/components/messages/hello'
+      fromWorker:
+        $ref: '#/components/messages/fromWorker'
+  worker:
+    address: worker process
+    messages:
+      problem:
+        $ref: '#/components/messages/problem'
+      toHost:
+        $ref: '#/components/messages/toHost'
+  host:
+    address: standard input and output of turbo_host
+    messages:
+      hostFrame:
+        $ref: '#/components/messages/hostFrame'
+operations:
+  announce:
+    action: send
+    channel:
+      $ref: '#/channels/coordinator'
+    messages:
+      - $ref: '#/channels/coordinator/messages/hello'
+  report:
+    action: send
+    channel:
+      $ref: '#/channels/coordinator'
+    messages:
+      - $ref: '#/channels/coordinator/messages/fromWorker'
+  instruct:
+    action: receive
+    channel:
+      $ref: '#/channels/worker'
+    messages:
+      - $ref: '#/channels/worker/messages/problem'
+      - $ref: '#/channels/worker/messages/toHost'
+  frames:
+    action: send
+    channel:
+      $ref: '#/channels/host'
+    messages:
+      - $ref: '#/channels/host/messages/hostFrame'
+components:
+  messages:
+    hello:
+      summary: A worker joins.
+      payload:
+        type: object
+        required: [pid, kind]
+        properties:
+          pid: {type: string, description: the worker process, used as the node's identity}
+          kind: {type: string, enum: [cpu, gpu]}
+    fromWorker:
+      summary: A frame from the node's host, relayed unchanged.
+      payload:
+        type: object
+        required: [pid, frame]
+        properties:
+          pid: {type: string}
+          frame:
+            type: string
+            description: >
+              "U bound": a better objective bound than the last one reported.
+              "A skip bound solutions nodes": the guest finished or cancelled a subproblem and waits for the next; skip is the first subproblem not made unreachable
+              by its dive, bound its best, then its solution and node counts.
+              "R nodes fails solutions bound depth_max exhaustive" then one line "lower upper" per variable: the final report, with the best store.
+    problem:
+      summary: The problem, as the text the guest reads (a header of ten integers, the store, the bytecodes, the strategies).
+      payload:
+        type: object
+        required: [text]
+        properties:
+          text: {type: string}
+    toHost:
+      summary: A frame for the host.
+      payload:
+        type: object
+        required: [frame]
+        properties:
+          frame:
+            type: string
+            description: >
+              "S index bound": solve subproblem index with this global bound.
+              "D": no more subproblems.
+              "B bound": a better bound found elsewhere.
+              "C": cancel the subproblem in hand, another node finished it.
+              "X": stop.
+    hostFrame:
+      summary: The first frame of a host is "H" (hello); the worker answers with "P" and the problem text.
+      payload:
+        type: string
