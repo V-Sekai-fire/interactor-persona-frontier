@@ -2,14 +2,15 @@
 # the solver guest ELF under libriscv. Nodes are cookie-authenticated Erlang nodes, so a worker can be on another machine: start it there with the same cookie.
 #   coordinator:  elixir --name coord@HOST --cookie C tools/turbo_cluster.exs coordinator LEVEL.cp [--power P] [--workers N] [--steal-after-ms MS] [--no-steal]
 #   worker:       elixir --name wK@HOST    --cookie C tools/turbo_cluster.exs worker coord@HOST GUEST.elf HOST_BINARY [--kind cpu|gpu] [--budget INSTRUCTIONS]
-#   local test:   elixir tools/turbo_cluster.exs local LEVEL.cp [--power P] [--nodes gpu:1,cpu:2] [--slow-us US] [--steal-after-ms MS] [--no-steal] [--kill-one]
+#   local test:   elixir tools/turbo_cluster.exs local LEVEL.cp [--power P] [--nodes gpu:1,cpu:2] [--slow-us US] [--steal-after-ms MS] [--no-steal] [--kill-one] [--frame-ms 2.0]
+# --frame-ms runs every guest in 64 Hz frames of that much compute time (the host sleeps to the frame edge), for a machine that also runs a real-time game.
 # A node says what it is (cpu or gpu); the coordinator measures its speed in nodes per second. A node with nothing to do takes a subproblem from a clearly slower node by
 # presuming that node dead: the subproblem is redone, whichever copy finishes first wins, and the other is cancelled. The same path recovers a node that really dies.
 # Message formats are in service/turbo-cluster.asyncapi.yaml.
 {opts, [role | args], _} =
   OptionParser.parse(System.argv(),
     strict: [power: :integer, workers: :integer, budget: :integer, cookie: :string, guest: :string, host: :string, kind: :string, nodes: :string,
-             slow_us: :integer, steal_after_ms: :integer, no_steal: :boolean, kill_one: :boolean])
+             slow_us: :integer, frame_ms: :float, steal_after_ms: :integer, no_steal: :boolean, kill_one: :boolean])
 root = File.cwd!()
 runs = "/mnt/fire/6-datasource/turbo-runs"
 cookie = Keyword.get(opts, :cookie, "turbo_cluster")
@@ -175,7 +176,11 @@ end
 work = fn coord, guest, host_bin, budget, kind ->
   true = Node.connect(coord)
   Node.monitor(coord, true)
-  port = Port.open({:spawn_executable, host_bin}, [:binary, :exit_status, {:packet, 4}, {:args, [guest, Integer.to_string(budget)]}])
+  frame_env = case Keyword.get(opts, :frame_ms) do
+    nil -> []
+    ms -> [{~c"TURBO_FRAME_MS", ~c"#{ms}"}]
+  end
+  port = Port.open({:spawn_executable, host_bin}, [:binary, :exit_status, {:packet, 4}, {:env, frame_env}, {:args, [guest, Integer.to_string(budget)]}])
   loop = fn loop ->
     receive do
       {^port, {:data, "H"}} ->
@@ -234,7 +239,7 @@ case role do
         Port.open({:spawn_executable, System.find_executable("nice")},
           [:binary, :exit_status,
            {:args, ["-n", "19", System.find_executable("elixir"), Path.join(root, "tools/turbo_cluster.exs"), "worker", "coord@127.0.0.1", guest, host_bin,
-                    "--budget", Integer.to_string(budget), "--kind", kind, "--cookie", cookie]}, {:env, env}])
+                    "--budget", Integer.to_string(budget), "--kind", kind, "--cookie", cookie] ++ (case Keyword.get(opts, :frame_ms) do nil -> []; ms -> ["--frame-ms", to_string(ms)] end)}, {:env, env}])
       end
     coordinate.(cp_path, Keyword.get(opts, :power, 0), length(kinds))
     for p <- ports, Port.info(p) != nil, do: Port.close(p)

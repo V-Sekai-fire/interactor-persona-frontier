@@ -1,6 +1,7 @@
 // Runs the solver guest ELF under libriscv and talks to a worker node over stdin and stdout in length-prefixed frames (an Erlang Port with {packet, 4}).
 // host to worker: "H" hello | "A skip bound solutions nodes" (the guest waits for a subproblem; bound is this guest's best) | "U bound" a better bound than the last report | "R nodes fails solutions bound depth_max exhaustive" then n lines "lower upper"
 // worker to host: "P" problem text | "S index bound" assign a subproblem | "D" no more subproblems | "B bound" a better bound found elsewhere | "C" cancel the subproblem in hand (another node finished it) | "X" stop
+// TURBO_FRAME_MS (compute time per frame) and TURBO_FRAME_HZ (default 64) run the guest in frames: each window gets an instruction budget calibrated to that compute time, then the host sleeps to the next frame edge; window statistics go to stderr at exit.
 // TURBO_SLEEP_US makes the host sleep that long after every budget window, to imitate a slower node.
 #include <libriscv/machine.hpp>
 #include <fstream>
@@ -12,6 +13,8 @@
 #include <climits>
 #include <string>
 #include <vector>
+#include <chrono>
+#include <thread>
 using namespace riscv;
 using M = Machine<RISCV64>;
 static const int STATE = 24;
@@ -121,24 +124,52 @@ int main(int argc, char** argv) {
 			}
 		}
 	}
+	using clk = std::chrono::steady_clock;
+	const double frame_ms = getenv("TURBO_FRAME_MS") ? atof(getenv("TURBO_FRAME_MS")) : 0.0;
+	const double hz = getenv("TURBO_FRAME_HZ") ? atof(getenv("TURBO_FRAME_HZ")) : 64.0;
+	const auto period = std::chrono::duration_cast<clk::duration>(std::chrono::duration<double>(1.0 / hz));
+	auto next_frame = clk::now() + period;
+	if (frame_ms > 0) budget = 200000;
+	struct { uint64_t windows = 0; double max_ms = 0, sum_ms = 0; uint64_t over = 0; uint64_t instructions = 0; } stats;
+	auto window = [&](bool first) {
+		uint64_t before = machine.instruction_counter();
+		auto t0 = clk::now();
+		if (first) machine.simulate<false>(budget); else machine.resume<false>(budget);
+		double ms = std::chrono::duration<double, std::milli>(clk::now() - t0).count();
+		uint64_t ran = machine.instruction_counter() - before;
+		stats.windows++; stats.sum_ms += ms; stats.instructions += ran;
+		if (ms > stats.max_ms) stats.max_ms = ms;
+		if (frame_ms > 0) {
+			if (ms > frame_ms * 1.5) stats.over++;
+			if (ran > 1000 && ms > 0.01) budget = std::max<uint64_t>(50000, uint64_t(0.5 * budget + 0.5 * (double(ran) * frame_ms / ms)));
+			std::this_thread::sleep_until(next_frame);
+			next_frame += period;
+			if (next_frame < clk::now()) next_frame = clk::now() + period;
+		}
+		if (sleep_us) usleep(sleep_us);
+	};
+	auto report = [&]() {
+		if (stats.windows && frame_ms > 0)
+			std::cerr << "frames: " << stats.windows << " windows, mean " << stats.sum_ms / stats.windows << " ms, max " << stats.max_ms << " ms, over 1.5x target (" << frame_ms << " ms): " << stats.over
+			          << ", " << stats.instructions << " instructions, final budget " << budget << "\n";
+	};
 	try {
-		bool more = machine.simulate<false>(budget);
-		(void)more;
+		window(true);
 		while (machine.instruction_limit_reached() && !lnk.stop) {
 			while (input_waiting()) {
 				std::string extra;
-				if (!read_frame(extra)) return 4;
+				if (!read_frame(extra)) { report(); return 4; }
 				if (extra[0] == 'B') apply_bound(machine, lnk, std::stoi(extra.substr(2)));
 				else if (extra[0] == 'C' && lnk.control) puti(machine, lnk.control, 15, 1);
-				else if (extra[0] == 'X') return 0;
+				else if (extra[0] == 'X') { report(); return 0; }
 			}
 			if (lnk.state) {
 				int mine = geti(machine, lnk.state, 5);
 				if (mine < lnk.reported) { lnk.reported = mine; write_frame("U " + std::to_string(mine)); }
 			}
-			machine.resume<false>(budget);
-			if (sleep_us) usleep(sleep_us);
+			window(false);
 		}
+		report();
 	} catch (const MachineException& e) {
 		std::cerr << "guest failed: " << e.what() << " data 0x" << std::hex << e.data() << " at pc 0x" << machine.cpu.pc() << std::dec << "\n";
 		uint64_t slot = 0;
