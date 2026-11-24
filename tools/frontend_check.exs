@@ -9,7 +9,7 @@ expected = parse.(File.read!(Path.join(root, "frontend/expected/#{level}.stats")
 {out, 0} = System.cmd(Path.join(root, ".lake/build/bin/frontier_frontend"), ["--stats", fzn])
 got = parse.(out)
 bad =
-  for key <- ["parsed_variables", "parsed_constraints"], reduce: 0 do
+  for key <- ["parsed_variables", "parsed_constraints", "tnf_variables", "tnf_constraints"], reduce: 0 do
     acc ->
       ok = got[key] == expected[key]
       IO.puts("#{if ok, do: "ok  ", else: "FAIL"} #{key}: got #{got[key]}, Turbo #{expected[key]}")
