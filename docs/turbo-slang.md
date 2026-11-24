@@ -67,7 +67,7 @@ variables unbounded except for the division operators (Turbo itself divides by z
 `elixir tools/turbo_diff.exs slang/turbo/oracle/reference.txt` compiles the hand-written `pir.slang` and the Lean-emitted module to C++ with slangc and g++, runs both on the same boxes,
 and meets each result with the input box as Turbo's store does. Result: reference vs hand 5,400 of 5,400, reference vs Lean 5,400 of 5,400, hand vs Lean 5,400 of 5,400.
 It found one real fault, fixed: Turbo's macros read `r1` live, so `EMOD` sets `r1.ub() = xl` with the new lower bound. `deduce` now changes `r1`, `r2`, `r3` in place like the source.
-Not covered: `FDIV` and `CDIV` (no FlatZinc name reaches them), one-sided unbounds, the division operators with unbounded variables, `ask` (only `deduce` is compared), many-step fixpoints.
+Added 2026-11-24: `FDIV` and `CDIV` (the harness overwrites the operator of an `int_plus` bytecode in `pir.bytecodes`) and `ask` before and after `deduce`; 6,600 rows (600 per operator, 11 operators); reference, hand-written and Lean-emitted agree on 6,600 of 6,600 for bounds and both `ask` values. Not covered: the division operators with unbounded variables (Turbo itself divides by zero there), one-sided unbounds.
 ## P2 format and kernel (2026-11-24)
 Format: store `lower[v]`, `upper[v]` (`int`), bytecodes `code[i] = (op, x, y, z)` meaning `x = y op z` with the operator codes of `turbo/Turbo/Pir.lean`, `control[0]` the bytecode count.
 `turbo/Turbo/Fixpoint.lean` adds `embed`, `deduce_bytecode` (load three variables, `deduce`, embed the three results in order, as `PIR::deduce(bytecode)`) and the entry `fixpoint`:

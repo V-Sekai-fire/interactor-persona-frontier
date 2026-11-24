@@ -23,10 +23,16 @@ status_file = checkpoint <> ".status"
 domain = Path.join(root, "entities/domains/turbo-solve.jsonld")
 
 load1 = fn -> "/proc/loadavg" |> File.read!() |> String.split() |> hd() |> String.to_float() end
+nvidia_smi = System.find_executable("nvidia-smi") || (if File.exists?("/usr/lib/wsl/lib/nvidia-smi"), do: "/usr/lib/wsl/lib/nvidia-smi")
+# No nvidia-smi at all means no GPU to protect; a GPU that cannot be read counts as busy.
 gpu_percent = fn ->
-  case System.cmd("nvidia-smi", ["--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"], stderr_to_stdout: true) do
-    {out, 0} -> out |> String.split("\n", trim: true) |> Enum.map(&String.to_integer(String.trim(&1))) |> Enum.max()
-    _ -> 0
+  if nvidia_smi == nil do
+    0
+  else
+    case System.cmd(nvidia_smi, ["--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"], stderr_to_stdout: true) do
+      {out, 0} -> out |> String.split("\n", trim: true) |> Enum.map(&String.to_integer(String.trim(&1))) |> Enum.max()
+      _ -> 100
+    end
   end
 end
 free? = fn -> load1.() < max_load and gpu_percent.() < max_gpu end
