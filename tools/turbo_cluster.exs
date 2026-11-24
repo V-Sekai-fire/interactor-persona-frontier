@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0 AND MIT
 # Distributed solving over Erlang distribution: a coordinator node hands out subproblems and shares the best bound; worker nodes (one per core, GPU or machine) each run
 # the solver guest ELF under libriscv. Nodes are cookie-authenticated Erlang nodes, so a worker can be on another machine: start it there with the same cookie.
-#   coordinator:  elixir --name coord@HOST --cookie C tools/turbo_cluster.exs coordinator LEVEL.cp [--power P] [--workers N] [--steal-after-ms MS] [--no-steal]
+#   coordinator:  elixir --name coord@HOST --cookie C tools/turbo_cluster.exs coordinator LEVEL.cp [--power P] [--workers N] [--steal-after-ms MS] [--no-steal] [--problem INPUT.txt]
 #   worker:       elixir --name wK@HOST    --cookie C tools/turbo_cluster.exs worker coord@HOST GUEST.elf HOST_BINARY [--kind cpu|gpu] [--budget INSTRUCTIONS]
 #   local test:   elixir tools/turbo_cluster.exs local LEVEL.cp [--power P] [--nodes gpu:1,cpu:2] [--slow-us US] [--steal-after-ms MS] [--no-steal] [--kill-one] [--frame-ms 2.0]
 # --frame-ms runs every guest in 64 Hz frames of that much compute time (the host sleeps to the frame edge), for a machine that also runs a real-time game.
@@ -14,7 +14,7 @@
 {opts, [role | args], _} =
   OptionParser.parse(System.argv(),
     strict: [power: :integer, workers: :integer, budget: :integer, cookie: :string, guest: :string, host: :string, kind: :string, nodes: :string,
-             slow_us: :integer, frame_ms: :float, steal_after_ms: :integer, no_steal: :boolean, kill_one: :boolean])
+             slow_us: :integer, problem: :string, frame_ms: :float, steal_after_ms: :integer, no_steal: :boolean, kill_one: :boolean])
 root = File.cwd!()
 runs = "/mnt/fire/6-datasource/turbo-runs"
 cookie = Keyword.get(opts, :cookie, "turbo_cluster")
@@ -59,7 +59,11 @@ coordinate = fn cp_path, power, wanted ->
     tracer = spawn(fn -> Stream.repeatedly(fn -> receive do {:trace, _, :receive, m} -> if is_tuple(m) and elem(m, 0) in [:from_worker, :hello, :DOWN], do: IO.puts("  <- " <> String.slice(inspect(m, limit: 6, printable_limit: 40), 0, 130)) end end) |> Stream.run() end)
     :erlang.trace(self(), true, [:receive, {:tracer, tracer}])
   end
-  text = problem_text.(cp_path, power)
+  # --problem FILE hands over the solver's input text as it is (a fixture), so the coordinator needs no solver build
+  text = case Keyword.get(opts, :problem) do
+    nil -> problem_text.(cp_path, power)
+    file -> File.read!(file)
+  end
   [_, _, _, objective] = text |> String.split() |> Enum.take(4) |> Enum.map(&String.to_integer/1)
   total = Bitwise.bsl(1, power)
   steal_after = if Keyword.get(opts, :no_steal, false), do: :never, else: Keyword.get(opts, :steal_after_ms, 500)

@@ -1,0 +1,37 @@
+# SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+# SPDX-License-Identifier: Apache-2.0 OR MIT
+# The solver cluster over a real network: a coordinator and three workers are four containers with four addresses on one Docker network, joined as Erlang nodes with a
+# shared cookie. One worker is throttled (its subproblem gets stolen), one dies on its first assignment (its subproblem is redone). CPU nodes only: a runner has no GPU.
+name: cluster
+on:
+  pull_request:
+    paths: ['tools/turbo_cluster.exs', 'tools/cluster_*.sh', 'guest/**', 'deploy/cluster/**', 'frontend/fixtures/**', '.github/workflows/cluster.yml']
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  cluster:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - run: docker build -f deploy/cluster/Containerfile -t turbo-cluster .
+      - run: docker network create --subnet 172.28.0.0/24 turbo
+      - name: Coordinator and workers
+        run: |
+          run() { name=$1; ip=$2; shift 2; docker run -d --name "$name" --network turbo --ip "$ip" -e NODE_NAME="$name@$ip" "$@"; }
+          run coord 172.28.0.10 turbo-cluster elixir tools/turbo_cluster.exs coordinator frontend/fixtures/scout.cp --power 3 --workers 3 --steal-after-ms 300 --problem frontend/fixtures/scout.power3.input.txt --cookie ci
+          sleep 5
+          docker run -d --name w1 --network turbo --ip 172.28.0.11 -e NODE_NAME=w1@172.28.0.11 turbo-cluster elixir tools/turbo_cluster.exs worker coord@172.28.0.10 /repo/guest/prebuilt/turbo_guest.elf /opt/host/turbo_host --kind cpu --budget 50000000 --cookie ci
+          docker run -d --name w2 --network turbo --ip 172.28.0.12 -e NODE_NAME=w2@172.28.0.12 -e TURBO_SLEEP_US=20000 turbo-cluster elixir tools/turbo_cluster.exs worker coord@172.28.0.10 /repo/guest/prebuilt/turbo_guest.elf /opt/host/turbo_host --kind cpu --budget 1000000 --cookie ci
+          docker run -d --name w3 --network turbo --ip 172.28.0.13 -e NODE_NAME=w3@172.28.0.13 -e TURBO_DIE_AT_ASSIGN=1 turbo-cluster elixir tools/turbo_cluster.exs worker coord@172.28.0.10 /repo/guest/prebuilt/turbo_guest.elf /opt/host/turbo_host --kind cpu --budget 50000000 --cookie ci
+          timeout 300 docker wait coord
+          docker logs coord > coord.log 2>&1
+          cat coord.log
+      - name: Judge
+        run: tools/cluster_check.sh coord.log
+      - name: Worker logs
+        if: always()
+        run: for w in w1 w2 w3; do echo "== $w"; docker logs $w 2>&1 | tail -n 20; done
