@@ -23,11 +23,14 @@ Pipeline with no Turbo code in it: `.mzn` compiled by MiniZinc's own library, `f
 - Profile: `TURBO_EVENTS=FILE` on the player or the cluster, then `elixir tools/turbo_profile.exs FILE`.
 - Checks that must stay green: `reuse lint`, `elixir tools/party_saga.exs check` (21 tests), the `flake`, `prek` and `cluster` workflows.
 
+## What bounds a slice
+One GPU launch at the default 64 blocks takes about 10 ms; the player's slice is 500 launches (about 5 s of launch time at duty 50) and the planner decides once per slice (about 120 ms, 9.3 percent). The CPU host keeps 64 Hz frames by instruction windows inside one process (worst window 2.83 ms against a 2 ms target). Against the solvers bundled with MiniZinc this solver is roughly on par (party 3.5 s against Chuffed 1.3 s and Gecode 91 s; saga 13.2 s against 15.9 s and 11.2 s), see `docs/turbo-slang.md`.
+
 ## Rules that decide how things are done here
 Mission first. Constant work: one code path, special cases as data, no modes. No delays: queues and state machines (`gen_statem`). CI runs the smallest level only; GPU and multi-machine tests are local. Long jobs are systemd units; the machine also runs the owner's game, so one niced thread and the GPU only when it is free.
 
 ## Open, in order
-1. The `maximize` path of the front end (`find_maximize_var`, `add_minimize_objective_var`) and a CI check that `frontier_frontend --dump` of the scout fixture equals `frontend/fixtures/scout.cp`.
+1. The edge of this solver on the frontier ladder (`elixir tools/party_saga.exs edge turbo-slang`), set against CP-SAT's table in `docs/party-saga.md`; then whether clause learning or more blocks is the lever. Missing options in the table of `docs/turbo-slang.md`: `-a`, `-n`, `-i`, `-eps_var_order`, `-f`; the global-constraint predicates are not read yet.
 2. An on-disk checkpoint of the CPU guest (`turbo_host` keeps the guest between 64 Hz windows in one process only; the GPU host has `save` and `load`, verified on many blocks).
 3. A resident planner (the `frontier` service would have to take the `turbo_solve` problem over A2A).
 Parked: bounds backed by a checked solution in the replicated cluster, coordinator replication, joining by tokens and bonds; the viewer's planner replay difference for `character` and `world`; the SPDX-header reading (the owner can overrule).

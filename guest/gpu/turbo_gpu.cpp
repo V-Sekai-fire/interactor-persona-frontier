@@ -54,8 +54,8 @@ template <class T> static CUdeviceptr upload(const std::vector<T>& v) {
 }
 
 int main(int argc, char** argv) {
-    if (argc < 5) { fprintf(stderr, "usage: %s kernel.cubin input.txt blocks slice_nodes [pause_ms]\n", argv[0]); return 2; }
-    int blocks = atoi(argv[3]), slice = atoi(argv[4]), pause_ms = argc > 5 ? atoi(argv[5]) : 0;
+    if (argc < 5) { fprintf(stderr, "usage: %s kernel.cubin input.txt blocks launch_us [pause_ms]\n", argv[0]); return 2; }
+    int blocks = atoi(argv[3]), launch_us = atoi(argv[4]), pause_ms = argc > 5 ? atoi(argv[5]) : 0;
     FILE* in = fopen(argv[2], "r");
     if (!in) return 2;
     int h[10];
@@ -76,12 +76,16 @@ int main(int argc, char** argv) {
     { std::vector<int> fill(var_start.begin(), var_start.end() - 1);
       for (int i = 0; i < m; ++i) for (int k = 1; k <= 3; ++k) var_props[fill[code[4 * i + k]]++] = i; }
     std::vector<int> zeros_dirty(cells, 0), zeros_dirty2(cells * 2, 0), zeros_marks((size_t)blocks * m, 0);
-    std::vector<int> zeros_cells(cells, 0), decisions((size_t)blocks * max_depth * 8, 0), state((size_t)blocks * STATE, 0), control(16, 0);
+    std::vector<int> zeros_cells(cells, 0), decisions((size_t)blocks * max_depth * 8, 0), state((size_t)blocks * STATE, 0), control(17, 0);
     control[0] = m; control[1] = n; control[2] = ns; control[3] = objective; control[4] = power; control[5] = max_depth;
-    control[6] = blocks; control[7] = h[7]; control[8] = h[8]; control[10] = blocks; control[11] = INT_MAX; control[13] = slice;
+    control[6] = blocks; control[7] = h[7]; control[8] = h[8]; control[10] = blocks; control[11] = INT_MAX;
 
     CHECK(cuInit(0));
     CUdevice dev; CHECK(cuDeviceGet(&dev, 0));
+    // a launch is a time budget, not a node count: the kernel stops a launch at the next node once its device clock has run this many ticks, so a launch is about launch_us microseconds
+    // whatever the size of the level (the clock rate is the card's rated one; a card held below it runs a little longer)
+    int clock_khz = 0; CHECK(cuDeviceGetAttribute(&clock_khz, CU_DEVICE_ATTRIBUTE_CLOCK_RATE, dev));
+    control[16] = (int)((long long)clock_khz * launch_us / 1000);
     CUcontext ctx; CHECK(cuCtxCreate(&ctx, 0, dev));
     CUmodule mod; CHECK(cuModuleLoad(&mod, argv[1]));
     CUfunction fn; CHECK(cuModuleGetFunction(&fn, mod, "solve"));

@@ -31,7 +31,7 @@ end
 solve = fn cp, blocks, power ->
   {out, 0} = elixir.([Path.join(root, "tools/turbo_solve.exs"), cp, "--input-only", "--power", "#{power}"])
   input = Path.join(out |> String.split("\n", trim: true) |> List.last(), "input.txt")
-  {text, status} = System.cmd("nice", ["-n", "19", host, cubin, input, "#{blocks}", "50"], stderr_to_stdout: true)
+  {text, status} = System.cmd("nice", ["-n", "19", host, cubin, input, "#{blocks}", "1000"], stderr_to_stdout: true)
   field = fn pattern -> case Regex.run(pattern, text) do [_, value] -> String.to_integer(value); _ -> nil end end
   done = status == 0 and String.contains?(text, "status done")
   exhaustive = Regex.run(~r/exhaustive blocks (\d+) of (\d+)/, text)
