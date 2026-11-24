@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 { lib, stdenv, fetchgit, leanToolchain, git, cacert, autoPatchelfHook }:
 
 # Lake resolves its dependencies from git and checks each checkout's revision, so every dependency is
@@ -18,6 +20,12 @@ let
       "f18818941e8914b110f85ec330889a4785c01bf1" "sha256-zzugPH1RI46tfxGWjP3JOZ8dD5wog9A7gtN8V/SvZ8M=")
     (dep "plausible" "https://github.com/leanprover-community/plausible"
       "118aa17ee84656b8bd727fef7c458ee8c833385c" "sha256-n/B8mI0FT3RImWD9PoQgJgKSFegYAnbU4x3wXhTud+8=")
+    (dep "Plausible" "https://github.com/leanprover-community/plausible"
+      "118aa17ee84656b8bd727fef7c458ee8c833385c" "sha256-n/B8mI0FT3RImWD9PoQgJgKSFegYAnbU4x3wXhTud+8=")
+    (dep "entity_packet" "https://github.com/V-Sekai-fire/contract-entity-packet"
+      "fe7a9627a9b23134f998a50cd854e9cc6743c536" "sha256-qWbtFQv+4EOIlutFkJ3+WSF99HHARq4IDCZb7Idjz+I=")
+    (dep "LeanSlang" "https://github.com/V-Sekai-fire/contract-lean-slang"
+      "01dbd396639f3ea44c87bef209a1449bd8d12844" "sha256-gyMUuA8aOAijXzNmM71yVyL41wQLpol6+ZFBd3SU4EE=")
   ];
 in
 stdenv.mkDerivation {
@@ -41,7 +49,7 @@ stdenv.mkDerivation {
       cp -r ${d.src} .lake/packages/${d.name}
       chmod -R u+w .lake/packages/${d.name}
     '') deps}
-    lake build frontier frontier_witness
+    lake build frontier frontier_witness frontier_store frontier_packets
     runHook postBuild
   '';
 

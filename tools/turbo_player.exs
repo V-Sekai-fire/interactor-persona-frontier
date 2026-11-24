@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+# SPDX-FileCopyrightText: 2025 Pierre Talbot
+# SPDX-FileCopyrightText: 2021 Pierre Talbot, Frédéric Pinel
+# SPDX-License-Identifier: Apache-2.0 AND MIT
 # Solve a dumped problem in time slices, planning each slice with the planner (domain turbo_solve, stored in SQLite) and only when the machine is free.
 # The game on this machine is real time: a slice is a bounded number of nodes at the lowest priority, the planner is asked again after every slice
 # (reentrant, like the replan loop of an HTN planner), and the whole search state is in a checkpoint file, so this tool can be stopped and started at any time.
@@ -33,7 +37,7 @@ store_bin = Path.join(root, ".lake/build/bin/frontier_store")
   end
 checkpoint = Keyword.get(opts, :checkpoint, Path.join(scratch, "checkpoint.bin"))
 status_file = checkpoint <> ".status"
-domain = Path.join(root, "entities/domains/turbo-solve.jsonld")
+domain = Path.join(root, "entities/domains/turbo-solve.yamlld")
 
 load1 = fn -> "/proc/loadavg" |> File.read!() |> String.split() |> hd() |> String.to_float() end
 nvidia_smi = System.find_executable("nvidia-smi") || (if File.exists?("/usr/lib/wsl/lib/nvidia-smi"), do: "/usr/lib/wsl/lib/nvidia-smi")
