@@ -109,7 +109,7 @@ lean_exe «turbo_emit» where
 -- The FlatZinc front end of Turbo (lala-parsing and lala-core's formula), written in Lean.
 lean_lib «Frontend» where
   srcDir := "frontend"
-  roots := #[`Frontend.Formula, `Frontend.Fzn, `Frontend.Ternarize]
+  roots := #[`Frontend.Formula, `Frontend.Fzn, `Frontend.Ternarize, `Frontend.Interval, `Frontend.Simplify]
 lean_exe «frontier_frontend» where
   srcDir := "frontend"
   root := `FrontendMain
