@@ -398,6 +398,11 @@ defmodule Saga.Cli do
     r = run(solver, mzn(), file, 60)
     IO.puts("#{solver}: #{r.status} objective=#{inspect(r.objective)} #{r.seconds}s")
   end
+  def main(["dump", track, g, seed, out]) do
+    w = Saga.Gen.level(String.to_atom(track), String.to_integer(g), 0, String.to_integer(seed))
+    File.write!(out, Saga.render(w))
+    IO.puts("wrote #{out}")
+  end
   def main(["agree" | rest]) do
     limit = opt(rest, "--limit", 30)
     rows = Enum.filter(Saga.Frontier.traces(), &(&1["kind"] == "practice" and &1["solved"]))

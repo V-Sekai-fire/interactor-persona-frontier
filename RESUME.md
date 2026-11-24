@@ -21,6 +21,11 @@ What to do next. Background: `docs/party-saga.md`, `docs/solver-spec.md`, `docs/
 - Port Turbo to shader-slang (the repo has a `lean4-gpu-pipeline` route with `slangc`), and only then try a CPU Turbo from the same
   kernels. Until then Turbo's own `-arch cpu` is the only CPU mode (it passed both controls); it is a separate code path, not the port.
 
+## Next step (Turbo to Slang)
+Faithful copy of `pir.hpp` and the helpers it uses into `slang/`, all operators, before any trimming; see `docs/turbo-slang.md`
+("Rule from the owner: copy first"). `slangc` is at `/mnt/fire/6-datasource/slang-2026.20/x/bin/slangc` (needs `LD_LIBRARY_PATH=<x>/lib`);
+its C++ target rejects buffer atomics. `tools/party_saga.exs dump TRACK G SEED OUT.dzn` writes a generated level.
+
 ## Open
 - Hugging Face: the owner asked for the weights and auxiliary files to be on `hf:chibifire`, enough to restart the experiments.
   Not done: `hf` is not logged in (`hf auth login` or `HF_TOKEN`), and which weights is not settled (the ternary student weights in
