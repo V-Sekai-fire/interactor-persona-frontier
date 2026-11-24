@@ -137,6 +137,36 @@ partial def numQuantifiedVars : F → Nat
   | seq _ _ cs | eseq _ _ cs => cs.foldl (fun n c => n + numQuantifiedVars c) 0
   | _ => 0
 
+/-- `find_maximize_var`: the name of the variable that `maximize` names, anywhere in a conjunction. -/
+partial def maximizeVar? : F → Option String
+  | seq _ .MAXIMIZE cs => match cs[0]? with | some (lv _ name) => some name | _ => none
+  | seq _ .AND cs => cs.findSome? maximizeVar?
+  | _ => none
+
+/-- `find_existential_of`: the type and sort of the existential quantifier of a variable. -/
+partial def existentialOf? (name : String) : F → Option (Int × Srt)
+  | e t n sort => if n == name then some (t, sort) else none
+  | seq _ _ cs | eseq _ _ cs => cs.findSome? (existentialOf? name)
+  | _ => none
+
+/-- `add_minimize_objective_var`: `maximize(x)` becomes `maximize(x) /\ exists(__MINIMIZE_OBJ) /\ __MINIMIZE_OBJ = -x` in place, so that the search can only minimize. -/
+partial def addMinimizeObjective (sort : Srt) : F → F
+  | f@(seq _ .MAXIMIZE cs) =>
+    match cs[0]? with
+    | some x@(lv xt _) | some x@(v xt _) =>
+      mkBinary f .AND (mkBinary (e xt "__MINIMIZE_OBJ" sort) .AND (mkBinary (lv xt "__MINIMIZE_OBJ") .EQ (mkUnary .NEG x)))
+    | _ => f
+  | seq t .AND cs => seq t .AND (cs.map (addMinimizeObjective sort))
+  | f => f
+
+/-- Turbo's `preprocess` on the barebones architecture, before ternarizing. A problem without `maximize` is returned as it is. -/
+def withMinimizeObjective (f : F) : F :=
+  match maximizeVar? f with
+  | some name => match existentialOf? name f with
+    | some (_, sort) => addMinimizeObjective sort f
+    | none => f
+  | none => f
+
 /-- `num_constraints`: an existential is not a constraint, a conjunction is the sum of its conjuncts. -/
 partial def numConstraints : F → Nat
   | e .. => 0

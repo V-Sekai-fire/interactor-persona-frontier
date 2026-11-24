@@ -57,21 +57,26 @@ stdenv.mkDerivation {
     mkdir -p .lake/packages/LeanSlang/vendor .slang-sdk
     tar xzf ${slangSdk} -C .slang-sdk
     cp -r .slang-sdk/include .slang-sdk/lib .lake/packages/LeanSlang/vendor/
-    lake build frontier frontier_witness frontier_store frontier_packets
+    lake build frontier frontier_witness frontier_store frontier_packets frontier_frontend
     runHook postBuild
   '';
 
   # the witness is the unit gate, so a build that fails it does not exist; it runs after the loader is
   # patched, because the toolchain's binaries name a loader that NixOS lacks
   doInstallCheck = true;
+  # and so is the front end: its dump of the scout FlatZinc, minimizing and maximizing, is Turbo's own dump byte for byte
+  # (the maximize fixture is the same file with `maximize` for `minimize`), so a change that drifts from Turbo does not build
   installCheckPhase = ''
     $out/libexec/frontier_witness
+    $out/libexec/frontier_frontend --dump frontend/fixtures/scout.fzn | cmp - frontend/fixtures/scout.cp
+    sed 's/ minimize / maximize /' frontend/fixtures/scout.fzn | $out/libexec/frontier_frontend --dump /dev/stdin | cmp - frontend/fixtures/scout.maximize.cp
   '';
 
   installPhase = ''
     runHook preInstall
     install -Dm755 .lake/build/bin/frontier $out/bin/frontier
     install -Dm755 .lake/build/bin/frontier_witness $out/libexec/frontier_witness
+    install -Dm755 .lake/build/bin/frontier_frontend $out/libexec/frontier_frontend
     mkdir -p $out/share/frontier
     cp -r seeds $out/share/frontier/seeds
     # the store applies its migrations from this path relative to the working directory

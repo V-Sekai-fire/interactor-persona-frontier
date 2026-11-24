@@ -378,6 +378,8 @@ structure Dump where
   bcs : Array Con
   strats : Array (Nat × Nat × Array Nat)
   objective : Option Nat
+  /-- the variable the search minimizes: the objective of `minimize`, `__MINIMIZE_OBJ` for `maximize` -/
+  minimizeObjective : Option Nat
   isMin : Bool
   tnfVars : Nat
   tnfCons : Nat
@@ -403,7 +405,7 @@ def preprocessTcn (tnf : F) (extra : Array F) : Dump := Id.run do
   let (s, per, total, iters) := runLoop s numVars
   let (s, elimCount, consts) := s.useless
   if s.st.atBot then
-    return { bot := true, vars := #[], bcs := #[], strats := #[], objective := none, isMin := false, tnfVars := numVars, tnfCons := tnfCons,
+    return { bot := true, vars := #[], bcs := #[], strats := #[], objective := none, minimizeObjective := none, isMin := false, tnfVars := numVars, tnfCons := tnfCons,
              per := per, total := total, iters := iters, eliminatedVars := elimCount, varsAfter := 0, consAfter := 0 }
   -- the surviving variables, numbered in order
   let n := s.eqc.size
@@ -461,7 +463,7 @@ def preprocessTcn (tnf : F) (extra : Array F) : Dump := Id.run do
         strats := strats.push (vo, wo, vs)
     | _ => pure ()
   strats := strats.push (1, 0, #[])
-  return { bot := false, vars := vars, bcs := bcs, strats := strats, objective := objective, isMin := isMin, tnfVars := numVars, tnfCons := tnfCons,
+  return { bot := false, vars := vars, bcs := bcs, strats := strats, objective := objective, minimizeObjective := (if isMin then objective else (keep "__MINIMIZE_OBJ").orElse (fun _ => objective)), isMin := isMin, tnfVars := numVars, tnfCons := tnfCons,
            per := per, total := total, iters := iters, eliminatedVars := elimCount, varsAfter := vars.size, consAfter := consAfter,
            info := { idx := s.idx, eqc := s.eqc, elimV := s.elimV, newIdx := newIdx, consts := consts, sorts := s.sorts } }
 
@@ -480,7 +482,7 @@ def Dump.text (d : Dump) : String := Id.run do
   out := out.push s!"strategies {d.strats.size}"
   for (a, b, vs) in d.strats do
     out := out.push (s!"{a} {b} {vs.size}" ++ String.join (vs.toList.map fun v => s!" {v}"))
-  match d.objective with
+  match d.minimizeObjective with
   | some v => out := out.push s!"objective 0 {v}"
   | none => out := out.push "objective 1 -1"
   out := out.push s!"optimization {if d.objective.isSome && d.isMin then 1 else 0} {if d.objective.isSome && !d.isMin then 1 else 0}"
