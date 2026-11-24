@@ -12,7 +12,8 @@ What to do next. Background: `docs/party-saga.md`, `docs/solver-spec.md`, `docs/
 ## Turbo (GPU solver, outside this repository: `/mnt/fire/6-datasource/turbo-build`, notes in its `PARKED.md`)
 - Works: `-arch barebones -timeout 30000` solves the control (objective 8) and Party Saga `t01` (objective 6), as Gecode and CP-SAT do.
 - `-arch hybrid` and `-arch gpu` are compiled out in this branch. Use `-timeout`, not `-t`. Short timeouts give `UNKNOWN`
-  because other jobs share the GPU.
+  because a solve has a fixed cost of 2.5 to 3.8 s even for 12 variables (not load: six runs at 48 to 95% GPU use; cause untested,
+  suspects: the 97% device-heap limit at `barebones_dive_and_solve.hpp:578`, pinned memory). Small levels will not be fast.
 - Next: add `turbo.gpu.release` as a fourth solver in `tools/party_saga.exs`, run `agree` and compare the frontier.
   Not measured yet: any Party Saga level above `t01`, and speed against CP-SAT.
 
