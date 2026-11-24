@@ -20,9 +20,9 @@ precedence = "override"
 SPDX-FileCopyrightText = "the SQLite authors"
 SPDX-License-Identifier = "blessing"
 
-# The TLA+ specification of parallel commits.
+# The TLA+ specification of parallel commits: BUSL-1.1 until its Change Date (2025-04-01, in its LICENSE), Apache-2.0 since.
 [[annotations]]
 path = ["datasources/datasource-store/thirdparty/tla/**"]
 precedence = "override"
 SPDX-FileCopyrightText = "Cockroach Labs, Inc."
-SPDX-License-Identifier = "BUSL-1.1"
+SPDX-License-Identifier = "Apache-2.0"
