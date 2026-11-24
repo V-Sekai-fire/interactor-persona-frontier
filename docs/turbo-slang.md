@@ -50,3 +50,14 @@ Recursion depth in the source is at most two levels (a split of `x`, then a spli
 fixed-depth copies, keeping each rule's text. That is the first departure from a literal copy and is forced by the compiler.
 Departures so far: `deduce` writes into the three intervals with `meet` instead of calling `sub->embed` (the caller stores them); `ask` for
 `MUL` spells `r2 == 0` as both bounds equal 0; values are `int`. Nothing here has been run, and none of it is tested against Turbo.
+## Use contract-lean-slang (owner, 2026-11-24)
+The propagator is written in Lean with https://github.com/V-Sekai-fire/contract-lean-slang (MIT, pinned in `lakefile.lean` at `01dbd39`) and
+printed as Slang, not kept as hand-written `.slang`. `turbo/Turbo/Pir.lean` builds the `SlangShaderModule`; `lake build turbo_emit` then
+`.lake/build/bin/turbo_emit` prints it. First slice: the division helpers, `Itv`, and `ADD` (`ask`, `deduce`); the emitted text compiles with
+`slangc` for spirv, cpp and cuda. Needs the Slang SDK under the dependency's `vendor/` (its `extern_lib` fails to build without `slang.h`);
+here `.lake/packages/LeanSlang/vendor/{include,lib}` link to the unpacked 2026.20 SDK, and `vendor/fetch.sh` there does the same download.
+Limits of the Lean AST met so far: no `switch` (use `if` chains), only `uint` literals (write `int(1u)`), no static members (use free functions), no macros.
+## Recursion, unrolled in the hand-written copy (`slang/turbo/pir.slang`, `den_levels.slang`)
+`den_fdiv` and `den_cdiv` are three levels deep in `den_levels.slang`; `den_tdiv` calls `den_tdiv_zero` instead of itself. With the entry point
+`probe.slang` it compiles for cpp and cuda; spirv compiles but takes about four minutes and writes 26 MB, because every level inlines the one below.
+The Lean version must keep the call tree small (share the `y` split) before the spirv target is usable. The hand-written file stays as the reference to compare against.

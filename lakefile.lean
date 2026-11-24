@@ -8,6 +8,8 @@ package «frontier» where
 require persona from git "https://github.com/V-Sekai-fire/interactor-taskweft-persona" @ "main"
 -- The integral fabric entity packet, MIT: the command packets the plan is sent as.
 require entity_packet from git "https://github.com/V-Sekai-fire/contract-entity-packet" @ "fe7a9627a9b23134f998a50cd854e9cc6743c536"
+-- The Lean AST that prints Slang: the Turbo propagator is written in Lean and emitted as a shader, not kept as hand-written Slang.
+require LeanSlang from git "https://github.com/V-Sekai-fire/contract-lean-slang" @ "01dbd396639f3ea44c87bef209a1449bd8d12844"
 
 -- YAML-LD in and out: the fixtures and domains in entities/ are .yamlld only.
 require «lean-yaml-ld» from git "https://github.com/V-Sekai-fire/lean-yaml-ld" @ "main"
@@ -94,3 +96,10 @@ lean_exe «frontier_packets» where
   srcDir := "transports"
   root := `PacketsMain
   moreLinkArgs := sqliteLink
+-- The Turbo propagator written in Lean and printed as Slang with contract-lean-slang.
+lean_lib «Turbo» where
+  srcDir := "turbo"
+  roots := #[`Turbo.Pir]
+lean_exe «turbo_emit» where
+  srcDir := "turbo"
+  root := `EmitMain

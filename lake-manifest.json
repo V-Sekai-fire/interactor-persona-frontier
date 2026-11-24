@@ -100,6 +100,18 @@
    "inputRev": "v4.34.0",
    "inherited": true,
    "configFile": "lakefile.toml"
+  },
+  {
+   "url": "https://github.com/V-Sekai-fire/contract-lean-slang",
+   "type": "git",
+   "subDir": null,
+   "scope": "",
+   "rev": "01dbd396639f3ea44c87bef209a1449bd8d12844",
+   "name": "LeanSlang",
+   "manifestFile": "lake-manifest.json",
+   "inputRev": "01dbd396639f3ea44c87bef209a1449bd8d12844",
+   "inherited": false,
+   "configFile": "lakefile.lean"
   }
  ],
  "name": "frontier",

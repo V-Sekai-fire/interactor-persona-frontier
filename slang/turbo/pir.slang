@@ -177,155 +177,62 @@ Itv num_ediv(Itv r1, Itv r3)
     return Itv.top();
 }
 
-// Lemma A.11 (recursive in the source)
-Itv den_fdiv(Itv r1, Itv r2)
+// Lemma A.11 and C.12 (recursive in the source): three levels, the lowest one never recurses, see den_levels.slang.
+Itv den_fdiv_below(Itv r1, Itv r2) { return Itv.top(); }
+Itv den_cdiv_below(Itv r1, Itv r2) { return Itv.top(); }
+#define SELF_FDIV den_fdiv0
+#define SELF_CDIV den_cdiv0
+#define NEXT_FDIV den_fdiv_below
+#define NEXT_CDIV den_cdiv_below
+#include "den_levels.slang"
+#undef SELF_FDIV
+#undef SELF_CDIV
+#undef NEXT_FDIV
+#undef NEXT_CDIV
+#define SELF_FDIV den_fdiv1
+#define SELF_CDIV den_cdiv1
+#define NEXT_FDIV den_fdiv0
+#define NEXT_CDIV den_cdiv0
+#include "den_levels.slang"
+#undef SELF_FDIV
+#undef SELF_CDIV
+#undef NEXT_FDIV
+#undef NEXT_CDIV
+#define SELF_FDIV den_fdiv
+#define SELF_CDIV den_cdiv
+#define NEXT_FDIV den_fdiv1
+#define NEXT_CDIV den_cdiv1
+#include "den_levels.slang"
+#undef SELF_FDIV
+#undef SELF_CDIV
+#undef NEXT_FDIV
+#undef NEXT_CDIV
+
+// Lemma C.13: the source calls itself on x = [0, 0]; that case is den_tdiv_zero.
+Itv den_tdiv_zero(Itv r1, Itv r2, Itv r3)
 {
-    if (xl > 0 || xu + 1 < 0)
-    {
-        if (yl > 0)
-        {
-            return Itv.make(min(fdiv(yl, xu + 1), fdiv(yu, xu + 1)) + 1,
-                            max(fdiv(yl, xl), fdiv(yu, xl)));
-        }
-        else if (yu < 0)
-        {
-            return Itv.make(min(cdiv(yl, xl), cdiv(yu, xl)),
-                            max(cdiv(yl, xu + 1), cdiv(yu, xu + 1)) - 1);
-        }
-        else if (0 == yl && yl < yu)
-        {
-            return den_fdiv(r1, Itv.make(1, yu));
-        }
-        else if (yl < yu && yu == 0)
-        {
-            return den_fdiv(r1, Itv.make(yl, -1));
-        }
-        else if (yl < 0 && 0 < yu)
-        {
-            return fjoin(den_fdiv(r1, Itv.make(yl, -1)), den_fdiv(r1, Itv.make(1, yu)));
-        }
-        else if (yl == 0 && yu == 0)
-        {
-            return Itv.bot();
-        }
-    }
-    else if (xl == 0 && xu == 0)
-    {
-        if (yl > 0) { return Itv.make(yl + 1, INF); }
-        else if (yu < 0) { return Itv.make(MINF, yu - 1); }
-    }
-    else if (xl == -1 && xu == -1)
-    {
-        if (yl > 0) { return Itv.make(MINF, -yl); }
-        else if (yu < 0) { return Itv.make(-yu, INF); }
-        else if (0 == yl && yl < yu) { return Itv.make(MINF, -1); }
-        else if (yl < yu && yu == 0) { return Itv.make(1, INF); }
-        else if (yl == 0 && yu == 0) { return Itv.bot(); }
-    }
-    else if (xl == 0 && 0 < xu)
-    {
-        return fjoin(den_fdiv(Itv.make(0, 0), r2), den_fdiv(Itv.make(1, xu), r2));
-    }
-    else if (xl < -1 && xu == -1)
-    {
-        return fjoin(den_fdiv(Itv.make(xl, -2), r2), den_fdiv(Itv.make(-1, -1), r2));
-    }
-    else if (xl <= -1 && xu >= 0)
-    {
-        Itv r = den_fdiv(Itv.make(-1, -1), r2);
-        r.join(den_fdiv(Itv.make(0, 0), r2));
-        if (xl != -1) { r.join(den_fdiv(Itv.make(xl, -2), r2)); }
-        if (xu != 0) { r.join(den_fdiv(Itv.make(1, xu), r2)); }
-        return r;
-    }
+    if (yl > 0 && zl > 0) { return Itv.make(yl + 1, INF); }
+    if (yl > 0 && zu < 0) { return Itv.make(MINF, -yl - 1); }
+    if (yu < 0 && zl > 0) { return Itv.make(-yu + 1, INF); }
+    if (yu < 0 && zu < 0) { return Itv.make(MINF, yu - 1); }
     return Itv.top();
 }
 
-// Lemma C.12 (recursive in the source)
-Itv den_cdiv(Itv r1, Itv r2)
-{
-    if (xl - 1 > 0 || xu < 0)
-    {
-        if (yl > 0)
-        {
-            return Itv.make(min(cdiv(yl, xu), cdiv(yu, xu)),
-                            max(cdiv(yl, xl - 1), cdiv(yu, xl - 1)) - 1);
-        }
-        else if (yu < 0)
-        {
-            return Itv.make(min(fdiv(yl, xl - 1), fdiv(yu, xl - 1)) + 1,
-                            max(fdiv(yl, xu), fdiv(yu, xu)));
-        }
-        else if (0 == yl && yl < yu)
-        {
-            return den_cdiv(r1, Itv.make(1, yu));
-        }
-        else if (yl < yu && yu == 0)
-        {
-            return den_cdiv(r1, Itv.make(yl, -1));
-        }
-        else if (yl < 0 && 0 < yu)
-        {
-            return fjoin(den_cdiv(r1, Itv.make(yl, -1)), den_cdiv(r1, Itv.make(1, yu)));
-        }
-        else if (yl == 0 && yu == 0)
-        {
-            return Itv.bot();
-        }
-    }
-    else if (xl == 0 && xu == 0)
-    {
-        if (yl > 0) { return Itv.make(MINF, -yl - 1); }
-        else if (yu < 0) { return Itv.make(-yu + 1, INF); }
-    }
-    else if (xl == 1 && xu == 1)
-    {
-        if (yl > 0) { return Itv.make(yl, INF); }
-        else if (yu < 0) { return Itv.make(MINF, yu); }
-        else if (0 == yl && yl < yu) { return Itv.make(1, INF); }
-        else if (yl < yu && yu == 0) { return Itv.make(MINF, -1); }
-        else if (yl == 0 && yu == 0) { return Itv.bot(); }
-    }
-    else if (xl < 0 && xu == 0)
-    {
-        return fjoin(den_cdiv(Itv.make(xl, -1), r2), den_cdiv(Itv.make(0, 0), r2));
-    }
-    else if (xl == 1 && 1 < xu)
-    {
-        return fjoin(den_cdiv(Itv.make(1, 1), r2), den_cdiv(Itv.make(2, xu), r2));
-    }
-    else if (xl <= 0 && xu >= 1)
-    {
-        Itv r = den_cdiv(Itv.make(1, 1), r2);
-        r.join(den_cdiv(Itv.make(0, 0), r2));
-        if (xl != 0) { r.join(den_cdiv(Itv.make(xl, -1), r2)); }
-        if (xu != 1) { r.join(den_cdiv(Itv.make(2, xu), r2)); }
-        return r;
-    }
-    return Itv.top();
-}
-
-// Lemma C.13
 Itv den_tdiv(Itv r1, Itv r2, Itv r3)
 {
     if (xl > 0) { return den_fdiv(r1, r2); }
     else if (xu < 0) { return den_cdiv(r1, r2); }
-    else if (xl == 0 && xu == 0)
-    {
-        if (yl > 0 && zl > 0) { return Itv.make(yl + 1, INF); }
-        if (yl > 0 && zu < 0) { return Itv.make(MINF, -yl - 1); }
-        if (yu < 0 && zl > 0) { return Itv.make(-yu + 1, INF); }
-        if (yu < 0 && zu < 0) { return Itv.make(MINF, yu - 1); }
-    }
+    else if (xl == 0 && xu == 0) { return den_tdiv_zero(r1, r2, r3); }
     else if (xl <= 0 && 0 <= xu)
     {
-        Itv r = den_tdiv(Itv.make(0, 0), r2, r3);
+        Itv r = den_tdiv_zero(Itv.make(0, 0), r2, r3);
         if (xl != 0) { r.join(den_cdiv(Itv.make(xl, -1), r2)); }
         if (xu != 0) { r.join(den_fdiv(Itv.make(1, xu), r2)); }
         return r;
     }
     return Itv.top();
 }
+
 
 Itv den_ediv(Itv r1, Itv r2, Itv r3)
 {
