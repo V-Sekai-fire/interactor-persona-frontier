@@ -2,233 +2,352 @@
 # SPDX-FileCopyrightText: 2025 Pierre Talbot
 # SPDX-FileCopyrightText: 2021 Pierre Talbot, Frédéric Pinel
 # SPDX-License-Identifier: Apache-2.0 AND MIT
-# Distributed solving over Erlang distribution: a coordinator node hands out subproblems and shares the best bound; worker nodes (one per core, GPU or machine) each run
-# the solver guest ELF under libriscv. Nodes are cookie-authenticated Erlang nodes, so a worker can be on another machine: start it there with the same cookie.
-#   coordinator:  elixir --name coord@HOST --cookie C tools/turbo_cluster.exs coordinator LEVEL.cp [--power P] [--workers N] [--no-steal] [--problem INPUT.txt]
-#   worker:       elixir --name wK@HOST    --cookie C tools/turbo_cluster.exs worker coord@HOST GUEST.elf HOST_BINARY [--kind cpu|gpu] [--budget INSTRUCTIONS]
-#   local test:   elixir tools/turbo_cluster.exs local LEVEL.cp [--power P] [--nodes gpu:1,cpu:2] [--slow-us US] [--no-steal] [--kill-one] [--frame-ms 2.0]
-# --frame-ms runs every guest in 64 Hz frames of that much compute time (the host sleeps to the frame edge), for a machine that also runs a real-time game.
-# A node says what it is (cpu or gpu). The coordinator is a queue machine: a node that asks gets the head of the queue of pending subproblems; with the queue empty and jobs in flight it takes the oldest in-flight job of a node that has finished fewer jobs than it has by
-# presuming that node dead: the subproblem is redone, whichever copy finishes first wins, and the other is cancelled. The same path recovers a node that really dies.
-# Message formats are in service/turbo-cluster.asyncapi.yaml.
+# Distributed solving over Erlang distribution: a coordinator node hands out subproblems; worker nodes (one per core, GPU or machine) each run the solver guest ELF
+# under libriscv. Nodes are cookie-authenticated Erlang nodes, so a worker can be on another machine: start it there with the same cookie.
+#   coordinator:  NODE_NAME=coord@HOST elixir tools/turbo_cluster.exs coordinator LEVEL.cp [--power P] [--workers N] [--replicas R] [--strikes S] [--forgive-after M]
+#                 [--lifetime-strikes L] [--no-steal] [--problem INPUT.txt] [--cookie C]
+#   worker:       NODE_NAME=wK@HOST elixir tools/turbo_cluster.exs worker coord@HOST GUEST.elf HOST_BINARY [--kind cpu|gpu] [--budget INSTRUCTIONS] [--frame-ms MS]
+#                 [--hold-first-job] [--die-at-first-job] [--lie] [--lie-times N] [--cookie C]
+#   local:        elixir tools/turbo_cluster.exs local LEVEL.cp [--power P] [--nodes gpu:1,cpu:2] [--kill-one] [--frame-ms 2.0] and the coordinator's options
+# --frame-ms runs every guest in 64 Hz frames of that much compute time, for a machine that also runs a real-time game.
+# The coordinator trusts no node. A subproblem's answer depends only on the problem, its index and the bound it is assigned with (tools/cluster_replay.exs checks this),
+# so an answer is accepted when --replicas nodes (f + 1, default 2) give the same one; a node whose answer differs from the accepted one gets a strike.
+# Both sides are gen_statem machines and no decision reads a clock. Message formats are in service/turbo-cluster.asyncapi.yaml.
 {opts, [role | args], _} =
   OptionParser.parse(System.argv(),
-    strict: [power: :integer, workers: :integer, budget: :integer, cookie: :string, guest: :string, host: :string, kind: :string, nodes: :string,
-             slow_us: :integer, problem: :string, frame_ms: :float, no_steal: :boolean, kill_one: :boolean, hold_first_job: :boolean, die_at_first_job: :boolean])
+    strict: [power: :integer, workers: :integer, budget: :integer, cookie: :string, guest: :string, host: :string, kind: :string, nodes: :string, problem: :string,
+             frame_ms: :float, no_steal: :boolean, kill_one: :boolean, hold_first_job: :boolean, die_at_first_job: :boolean, lie: :boolean, lie_times: :integer,
+             replicas: :integer, strikes: :integer, forgive_after: :integer, lifetime_strikes: :integer])
 root = File.cwd!()
 runs = "/mnt/fire/6-datasource/turbo-runs"
 cookie = Keyword.get(opts, :cookie, "turbo_cluster")
 
-# Every message carries the sender's hybrid logical clock (EntityPacket/Hlc.lean: 48 bits of milliseconds, 16 of counter, one integer), kept per process:
-# a send stamps, a receive merges. First-finish is decided by the stamp, not by arrival, and TURBO_EVENTS=FILE appends "cluster HLC NODE EVENT DETAIL" lines
-# that tools/turbo_profile.exs merges across nodes.
+# Every message carries the sender's hybrid logical clock (EntityPacket/Hlc.lean: 48 bits of milliseconds, 16 of counter, one integer), kept per process: a send
+# stamps, a receive merges. A stamp more than a minute ahead of this node's own clock is not merged (one node must not be able to push every clock forward).
+# TURBO_EVENTS=FILE appends "cluster HLC NODE EVENT DETAIL" lines that tools/turbo_profile.exs merges across nodes.
 defmodule Turbo.Hlc do
   @moduledoc false
-  # The clock of this process: (milliseconds << 16) | counter, kept in the process dictionary.
+  @ahead_ms 60_000
+
   def send do
-    {l0, c0} = Process.get(:hlc, {0, 0})
-    l = max(l0, System.os_time(:millisecond))
-    c = if l == l0, do: c0 + 1, else: 0
-    Process.put(:hlc, {l, c})
-    Bitwise.bor(Bitwise.bsl(l, 16), Bitwise.band(c, 0xFFFF))
+    {logical, counter} = Process.get(:hlc, {0, 0})
+    now = max(logical, System.os_time(:millisecond))
+    put(now, if(now == logical, do: counter + 1, else: 0))
   end
+
   def recv(word) do
-    {l0, c0} = Process.get(:hlc, {0, 0})
-    ml = Bitwise.bsr(word, 16)
-    mc = Bitwise.band(word, 0xFFFF)
-    l = Enum.max([l0, ml, System.os_time(:millisecond)])
-    c = cond do
-      l == l0 and l == ml -> max(c0, mc) + 1
-      l == l0 -> c0 + 1
-      l == ml -> mc + 1
-      true -> 0
+    {logical, counter} = Process.get(:hlc, {0, 0})
+    physical = System.os_time(:millisecond)
+    theirs = Bitwise.bsr(word, 16)
+    their_counter = Bitwise.band(word, 0xFFFF)
+    if theirs > physical + @ahead_ms do
+      trace("refused", "a stamp #{theirs - physical} ms ahead")
+      send()
+    else
+      now = Enum.max([logical, theirs, physical])
+      put(now, merged_counter(now, {logical, counter}, {theirs, their_counter}))
     end
-    Process.put(:hlc, {l, c})
-    Bitwise.bor(Bitwise.bsl(l, 16), Bitwise.band(c, 0xFFFF))
   end
+
+  defp merged_counter(now, {now, counter}, {now, their_counter}), do: max(counter, their_counter) + 1
+  defp merged_counter(now, {now, counter}, _theirs), do: counter + 1
+  defp merged_counter(now, _mine, {now, their_counter}), do: their_counter + 1
+  defp merged_counter(_now, _mine, _theirs), do: 0
+
+  defp put(logical, counter) do
+    Process.put(:hlc, {logical, counter})
+    Bitwise.bor(Bitwise.bsl(logical, 16), Bitwise.band(counter, 0xFFFF))
+  end
+
   def trace(event, detail) do
     if path = System.get_env("TURBO_EVENTS"), do: File.write!(path, "cluster #{__MODULE__.send()} #{node()} #{event} #{detail}\n", [:append])
   end
 end
-hlc_send = &Turbo.Hlc.send/0
-hlc_recv = &Turbo.Hlc.recv/1
-trace = &Turbo.Hlc.trace/2
 
-problem_text = fn cp_path, power ->
-  {out, 0} = System.cmd("elixir", [Path.join(root, "tools/turbo_solve.exs"), cp_path, "--prepare", "--power", Integer.to_string(power)], env: [{"ELIXIR_ERL_OPTIONS", "+fnu"}])
-  dir = out |> String.split("\n", trim: true) |> List.last()
-  File.read!(Path.join(dir, "input.txt"))
-end
+# The coordinator: a gen_statem with the states `registering` (until all wanted nodes have joined; answers are postponed) and `running`.
+# Data: nodes (the job in hand, counters, strikes), jobs (the bound given, who tried it, live runners, answers, the accepted answer, replicas wanted), the set of nodes
+# waiting for work. A waiting node is looked at again only after an event that changed a job or a node. When every live node waits and a job is still open the run
+# stops with "no quorum" instead of waiting for ever.
+defmodule Turbo.Coordinator do
+  @moduledoc false
+  @behaviour :gen_statem
+  @infinity 2_147_483_647
+  alias Turbo.Hlc
 
-coordinate = fn cp_path, power, wanted ->
-  Process.register(self(), :turbo_coordinator)
-  if System.get_env("TURBO_DEBUG") do
-    tracer = spawn(fn -> Stream.repeatedly(fn -> receive do {:trace, _, :receive, m} -> if is_tuple(m) and elem(m, 0) in [:from_worker, :hello, :DOWN], do: IO.puts("  <- " <> String.slice(inspect(m, limit: 6, printable_limit: 40), 0, 130)) end end) |> Stream.run() end)
-    :erlang.trace(self(), true, [:receive, {:tracer, tracer}])
+  def start(config), do: :gen_statem.start_link({:local, :turbo_coordinator}, __MODULE__, config, [])
+
+  @impl true
+  def callback_mode, do: :state_functions
+
+  @impl true
+  def init(config) do
+    counters = %{next: 0, bound: @infinity, sequence: 0, extra: 0, frauds: 0, accepted: 0, started: System.monotonic_time(:millisecond)}
+    sets = %{nodes: %{}, jobs: %{}, waiting: MapSet.new(), banned: MapSet.new(), alive: MapSet.new(), results: []}
+    IO.puts("coordinator #{node()} waiting for #{config.wanted} worker node(s); #{config.total} subproblems; #{config.faults + 1} equal answers accept one")
+    {:ok, :registering, config |> Map.merge(counters) |> Map.merge(sets)}
   end
-  # --problem FILE hands over the solver's input text as it is (a fixture), so the coordinator needs no solver build
-  text = case Keyword.get(opts, :problem) do
-    nil -> problem_text.(cp_path, power)
-    file -> File.read!(file)
-  end
-  [_, _, _, objective] = text |> String.split() |> Enum.take(4) |> Enum.map(&String.to_integer/1)
-  total = Bitwise.bsl(1, power)
-  steal? = not Keyword.get(opts, :no_steal, false)
-  started = System.monotonic_time(:millisecond)
-  now = fn -> System.monotonic_time(:millisecond) end
-  IO.puts("coordinator #{node()} waiting for #{wanted} worker node(s); #{total} subproblems; stealing #{if steal?, do: "on", else: "off"}")
 
-  share = fn st, from, bound ->
-    if bound < st.bound do
-      for {pid, _} <- st.workers, pid != from, do: send(pid, {:to_host, "B #{bound}", hlc_send.()})
-      %{st | bound: bound}
+  def registering(:info, {:hello, pid, kind, stamp}, data) do
+    data = register(data, pid, kind, stamp)
+    if map_size(data.nodes) >= data.wanted, do: {:next_state, :running, data}, else: {:keep_state, data}
+  end
+  def registering(:info, {:from_worker, _pid, _frame, _stamp}, _data), do: {:keep_state_and_data, :postpone}
+  def registering(:info, {:DOWN, _, :process, pid, _}, data), do: {:keep_state, lose(data, pid)}
+
+  def running(:info, {:hello, pid, kind, stamp}, data), do: {:keep_state, register(data, pid, kind, stamp)}
+  def running(:info, {:from_worker, pid, <<"A ", rest::binary>>, stamp}, data) do
+    Hlc.recv(stamp)
+    fields = rest |> String.split() |> Enum.map(&String.to_integer/1)
+    data |> answer(pid, fields) |> serve(pid) |> settle()
+  end
+  def running(:info, {:from_worker, pid, <<"R ", rest::binary>>, stamp}, data) do
+    Hlc.recv(stamp)
+    settle(%{data | results: [result(data, pid, rest) | data.results], alive: MapSet.delete(data.alive, pid), waiting: MapSet.delete(data.waiting, pid)})
+  end
+  def running(:info, {:from_worker, _pid, _bound_report, stamp}, _data) do
+    Hlc.recv(stamp)
+    :keep_state_and_data
+  end
+  def running(:info, {:DOWN, _, :process, pid, _}, data), do: data |> lose(pid) |> settle()
+
+  # ---- nodes
+
+  defp register(data, pid, kind, stamp) do
+    Hlc.recv(stamp)
+    Hlc.trace("hello", "from=#{inspect(pid)} kind=#{kind}")
+    Process.monitor(pid)
+    send(pid, {:problem, data.text, Hlc.send()})
+    node = %{kind: kind, job: nil, cancelled: false, done_jobs: 0, strikes: 0, streak: 0, lifetime: 0}
+    %{data | nodes: Map.put(data.nodes, pid, node), alive: MapSet.put(data.alive, pid)}
+  end
+
+  defp lose(data, pid) do
+    data = release(data, pid, "worker #{inspect(pid)} lost")
+    %{data | nodes: Map.delete(data.nodes, pid), alive: MapSet.delete(data.alive, pid), waiting: MapSet.delete(data.waiting, pid)}
+  end
+
+  # The job in a node's hand goes back to the queue (the node died or was banned).
+  defp release(data, pid, why) do
+    case data.nodes[pid] do
+      %{job: index} when index != nil ->
+        job = data.jobs[index]
+        if job.accepted == nil, do: IO.puts("#{why}; subproblem #{index} goes back in the queue")
+        put_in(data.jobs[index], %{job | runners: MapSet.delete(job.runners, pid)})
+      _ -> data
+    end
+  end
+
+  defp result(data, pid, text) do
+    [head | rows] = String.split(text, "\n", trim: true)
+    [nodes, fails, solutions, bound, depth, exhaustive] = head |> String.split() |> Enum.map(&String.to_integer/1)
+    kind = get_in(data.nodes, [pid, :kind]) || "gone"
+    %{pid: pid, kind: kind, nodes: nodes, fails: fails, solutions: solutions, bound: bound, depth: depth, exhaustive: exhaustive, store: rows}
+  end
+
+  # ---- answers
+
+  # A waiting frame: the node finished (or was cancelled on) the job in its hand, or it has none yet.
+  # The four numbers are the answer of the subproblem itself: the first subproblem it did not make unreachable, its best bound, its solutions and its nodes.
+  defp answer(data, pid, [skip, bound, solutions, nodes]) do
+    node = data.nodes[pid]
+    data = put_in(data.nodes[pid], %{node | job: nil, done_jobs: node.done_jobs + if(node.job == nil, do: 0, else: 1)})
+    cond do
+      node.job == nil or MapSet.member?(data.banned, pid) -> data
+      node.cancelled -> finish_run(data, node.job, pid)
+      true -> data |> finish_run(node.job, pid) |> record(node.job, pid, {skip, bound, solutions, nodes})
+    end
+  end
+
+  defp finish_run(data, index, pid), do: update_in(data.jobs[index].runners, &MapSet.delete(&1, pid))
+
+  defp record(data, index, pid, value) do
+    Hlc.trace("answer", "job=#{index} by=#{inspect(pid)}")
+    data = put_in(data.jobs[index].answers[pid], value)
+    case data.jobs[index].accepted do
+      nil -> judge(data, index)
+      accepted -> compare(data, pid, index, value, accepted)
+    end
+  end
+
+  # Accept at f + 1 equal answers of nodes with no strike; ask for one more replica when the answers in hand cannot reach that.
+  defp judge(data, index) do
+    job = data.jobs[index]
+    counted = for {pid, value} <- job.answers, trusted?(data, pid), do: value
+    winner = counted |> Enum.frequencies() |> Enum.find(fn {_value, count} -> count >= data.faults + 1 end)
+    cond do
+      winner != nil -> accept(data, index, elem(winner, 0))
+      length(counted) >= job.demand and job.demand < 2 * data.faults + 1 ->
+        IO.puts("subproblem #{index}: answers disagree, one more replica")
+        put_in(data.jobs[index].demand, job.demand + 1)
+      true -> data
+    end
+  end
+
+  defp accept(data, index, {skip, bound, _solutions, _nodes} = value) do
+    job = data.jobs[index]
+    Hlc.trace("accept", "job=#{index} bound=#{bound}")
+    for pid <- job.runners, do: send(pid, {:to_host, "C", Hlc.send()})
+    nodes = Enum.reduce(job.runners, data.nodes, fn pid, nodes -> Map.update!(nodes, pid, &%{&1 | cancelled: true}) end)
+    data = %{data | nodes: nodes, bound: min(data.bound, bound), next: max(data.next, skip), accepted: data.accepted + 1,
+                    jobs: Map.put(data.jobs, index, %{job | accepted: value, runners: MapSet.new()})}
+    Enum.reduce(job.answers, data, fn {pid, theirs}, data -> compare(data, pid, index, theirs, value) end)
+  end
+
+  defp compare(data, pid, index, value, accepted) do
+    cond do
+      MapSet.member?(data.banned, pid) or data.nodes[pid] == nil -> data
+      value == accepted -> agree(data, pid)
+      true -> strike(data, pid, index, value, accepted)
+    end
+  end
+
+  # ---- strikes: trusted -> probation -> banned, by counts only
+
+  defp trusted?(data, pid), do: not MapSet.member?(data.banned, pid) and data.nodes[pid] != nil and data.nodes[pid].strikes == 0
+
+  defp agree(data, pid) do
+    node = data.nodes[pid]
+    streak = node.streak + 1
+    if node.strikes > 0 and streak >= data.forgive_after do
+      IO.puts("forgiven: #{inspect(pid)} gave #{streak} accepted answers in a row, strikes #{node.strikes} -> #{node.strikes - 1}")
+      Hlc.trace("forgive", "node=#{inspect(pid)}")
+      put_in(data.nodes[pid], %{node | strikes: node.strikes - 1, streak: 0})
     else
-      st
-    end
-  end
-  runners = fn st, job -> st.workers |> Enum.filter(fn {_, w} -> w.job == job end) |> Enum.map(&elem(&1, 0)) end
-  live_jobs = fn st, except -> st.workers |> Enum.filter(fn {pid, w} -> pid != except and w.job != nil and not MapSet.member?(st.done, w.job) end) end
-  take = fn st ->
-    case st.retry do
-      [index | rest] -> {index, %{st | retry: rest}}
-      [] -> if st.next < total, do: {st.next, %{st | next: st.next + 1}}, else: {nil, st}
-    end
-  end
-  # A node with nothing to do waits while some subproblem is in flight, because that one may have to be done again.
-  wake = fn st ->
-    for message <- Enum.reverse(st.parked), do: send(self(), message)
-    %{st | parked: []}
-  end
-  finished? = fn st -> st.started and st.results != [] and MapSet.size(st.alive) == 0 end
-
-  # Work stealing: a victim is a node whose subproblem has run longer than the threshold and which is clearly slower than the thief.
-  # Its subproblem is treated as lost (the node is presumed dead for that job) and given to the thief; the victim keeps running until it is cancelled.
-  victim = fn st, thief ->
-    if steal? do
-      thief_done = Map.fetch!(st.workers, thief).done_jobs
-      st
-      |> live_jobs.(thief)
-      |> Enum.filter(fn {_pid, w} -> length(runners.(st, w.job)) == 1 and w.done_jobs < thief_done end)
-      |> Enum.min_by(fn {_, w} -> w.seq end, fn -> nil end)
+      put_in(data.nodes[pid], %{node | streak: streak})
     end
   end
 
-  assign = fn st, pid, job ->
-    if System.get_env("TURBO_DEBUG"), do: IO.puts("  -> S #{job} to #{inspect(pid)}")
-    send(pid, {:to_host, "S #{job} #{st.bound}", hlc_send.()})
-    trace.("assign", "job=#{job} to=#{inspect(pid)}")
-    w = Map.fetch!(st.workers, pid)
-    %{st | workers: Map.put(st.workers, pid, %{w | job: job, seq: st.seq}), seq: st.seq + 1}
+  defp strike(data, pid, index, value, accepted) do
+    node = data.nodes[pid]
+    node = %{node | strikes: node.strikes + 1, lifetime: node.lifetime + 1, streak: 0}
+    IO.puts("fraud: #{inspect(pid)} answered #{inspect(value)} for subproblem #{index}, accepted #{inspect(accepted)} (strike #{node.strikes} of #{data.strike_limit}, #{node.lifetime} in all)")
+    Hlc.trace("fraud", "job=#{index} node=#{inspect(pid)} strike=#{node.strikes}")
+    data = %{put_in(data.nodes[pid], node) | frauds: data.frauds + 1}
+    if node.strikes >= data.strike_limit or node.lifetime >= data.lifetime_limit, do: ban(data, pid), else: data
   end
 
-  loop = fn loop, st ->
-    receive do
-      {:hello, pid, kind, w} ->
-        hlc_recv.(w)
-        trace.("hello", "from=#{inspect(pid)} kind=#{kind}")
-        Process.monitor(pid)
-        send(pid, {:problem, text, hlc_send.()})
-        st = %{st | alive: MapSet.put(st.alive, pid)}
-        st = put_in(st.workers[pid], %{kind: kind, job: nil, seq: 0, done_jobs: 0})
-        st = if map_size(st.workers) >= wanted and not st.started, do: wake.(%{st | started: true, parked: st.parked ++ st.pending, pending: []}), else: st
-        loop.(loop, st)
-      {:from_worker, pid, <<"U ", rest::binary>>, w} ->
-        hlc_recv.(w)
-        loop.(loop, share.(st, pid, String.to_integer(rest)))
-      {:from_worker, _pid, <<"A ", _::binary>>, _w} = message when not st.started ->
-        loop.(loop, %{st | pending: [message | st.pending]})
-      {:from_worker, pid, <<"A ", rest::binary>>, w_hlc} = message ->
-        hlc_recv.(w_hlc)
-        [skip, bound, solutions, nodes] = rest |> String.split() |> Enum.map(&String.to_integer/1)
-        st = share.(st, pid, bound)
-        w = Map.fetch!(st.workers, pid)
-        # the node reports a finished or cancelled subproblem
-        st =
-          if w.job != nil and not MapSet.member?(st.done, w.job) do
-            others = runners.(st, w.job) -- [pid]
-            for other <- others, do: send(other, {:to_host, "C", hlc_send.()})
-            if others != [], do: IO.puts("subproblem #{w.job} finished by #{inspect(pid)} first; #{length(others)} copy cancelled")
-            trace.("finish", "job=#{w.job} by=#{inspect(pid)} stamp=#{w_hlc}")
-            %{st | done: MapSet.put(st.done, w.job), finished_by: Map.update(st.finished_by, pid, 1, &(&1 + 1)),
-                   won: Map.put(st.won, w.job, {w_hlc, pid}), next: max(st.next, skip)}
-          else
-            if w.job != nil do
-              # a copy that arrived later may have finished earlier: the smaller stamp wins
-              case Map.get(st.won, w.job) do
-                {first, loser} when w_hlc < first ->
-                  trace.("reorder", "job=#{w.job} first=#{inspect(pid)} arrived after #{inspect(loser)}")
-                  fb = st.finished_by |> Map.update(loser, 0, &max(&1 - 1, 0)) |> Map.update(pid, 1, &(&1 + 1))
-                  %{st | wasted: st.wasted + 1, finished_by: fb, won: Map.put(st.won, w.job, {w_hlc, pid}), reordered: st.reordered + 1}
-                _ -> %{st | wasted: st.wasted + 1}
-              end
-            else
-              %{st | next: max(st.next, skip)}
-            end
-          end
-        st = %{st | nodes: Map.put(st.nodes, pid, nodes), solutions: Map.put(st.solutions, pid, solutions),
-                    workers: Map.put(st.workers, pid, %{w | job: nil, done_jobs: w.done_jobs + (if w.job != nil, do: 1, else: 0)})}
-        st = if st.parked != [] and live_jobs.(st, nil) == [], do: wake.(st), else: st
-        {job, st} = take.(st)
-        cond do
-          job != nil ->
-            loop.(loop, assign.(st, pid, job))
-          (stolen = victim.(st, pid)) != nil ->
-            {slow, slow_w} = stolen
-            trace.("steal", "thief=#{inspect(pid)} victim=#{inspect(slow)} job=#{slow_w.job}")
-            IO.puts("#{inspect(pid)} (#{Map.fetch!(st.workers, pid).kind}) presumes #{inspect(slow)} (#{slow_w.kind}) dead for subproblem #{slow_w.job} and redoes it")
-            loop.(loop, assign.(%{st | steals: st.steals + 1}, pid, slow_w.job))
-          live_jobs.(st, pid) != [] ->
-            loop.(loop, %{st | parked: [message | st.parked]})
-          true ->
-            if System.get_env("TURBO_DEBUG"), do: IO.puts("  -> D to #{inspect(pid)}")
-            send(pid, {:to_host, "D", hlc_send.()})
-            loop.(loop, wake.(st))
-        end
-      {:from_worker, pid, <<"R ", rest::binary>>, w} ->
-        hlc_recv.(w)
-        [head | rows] = String.split(rest, "\n", trim: true)
-        [nodes, fails, solutions, bound, depth, exhaustive] = head |> String.split() |> Enum.map(&String.to_integer/1)
-        result = %{pid: pid, kind: Map.fetch!(st.workers, pid).kind, nodes: nodes, fails: fails, solutions: solutions, bound: bound, depth: depth, exhaustive: exhaustive, store: rows}
-        st = %{st | results: [result | st.results], alive: MapSet.delete(st.alive, pid)}
-        if finished?.(st), do: {:ok, st}, else: loop.(loop, st)
-      {:DOWN, _, :process, pid, _reason} ->
-        st =
-          case Map.get(st.workers, pid) do
-            %{job: index} when index != nil ->
-              if MapSet.member?(st.done, index) or runners.(st, index) -- [pid] != [] do
-                st
-              else
-                IO.puts("worker #{inspect(pid)} lost; subproblem #{index} goes back in the queue")
-                %{st | retry: [index | st.retry]}
-              end
-            _ -> st
-          end
-        st = wake.(%{st | workers: Map.delete(st.workers, pid), alive: MapSet.delete(st.alive, pid)})
-        if finished?.(st), do: {:ok, st}, else: loop.(loop, st)
+  # A banned node is told to stop; its live job goes back to the queue and its answers to jobs still open are void.
+  defp ban(data, pid) do
+    IO.puts("banned: #{inspect(pid)}")
+    send(pid, {:to_host, "D", Hlc.send()})
+    data = release(data, pid, "node #{inspect(pid)} banned")
+    jobs = Map.new(data.jobs, fn {index, job} -> {index, if(job.accepted == nil, do: %{job | answers: Map.delete(job.answers, pid)}, else: job)} end)
+    %{data | jobs: jobs, banned: MapSet.put(data.banned, pid), waiting: MapSet.delete(data.waiting, pid)}
+  end
+
+  # ---- the queue
+
+  # Replicas a job still wants: answers and live runs of nodes on probation do not count.
+  defp need(data, job) do
+    counted = Enum.count(Map.keys(job.answers), &trusted?(data, &1)) + Enum.count(job.runners, &trusted?(data, &1))
+    job.demand - counted
+  end
+
+  # What a node asking for work gets: the lowest job that wants a replica and that it has not tried; else the next new index; else an extra replica of the oldest
+  # job all of whose runners have answered fewer jobs than this node; else it waits while any job is open; else there is nothing left.
+  defp pick(data, pid) do
+    open = for {index, job} <- data.jobs, job.accepted == nil, not MapSet.member?(job.tried, pid), do: {index, job}
+    wanting = for {index, job} <- open, need(data, job) > 0, do: index
+    cond do
+      wanting != [] -> {:job, Enum.min(wanting), :replica}
+      data.next < data.total -> {:job, data.next, :new}
+      (index = extra_replica(data, pid, open)) != nil -> {:job, index, :extra}
+      Enum.any?(data.jobs, fn {_index, job} -> job.accepted == nil end) -> :wait
+      true -> :done
     end
   end
-  state = %{workers: %{}, next: 0, bound: 2_147_483_647, retry: [], solutions: %{}, nodes: %{}, results: [], pending: [], parked: [], started: false, alive: MapSet.new(),
-            done: MapSet.new(), finished_by: %{}, seq: 0, steals: 0, wasted: 0, won: %{}, reordered: 0}
-  {:ok, final} = loop.(loop, state)
-  if System.get_env("TURBO_DEBUG"), do: IO.puts("  registered #{inspect(Map.keys(final.workers))} results #{inspect(Enum.map(final.results, & &1.pid))}")
-  best = final.results |> Enum.filter(&(&1.solutions > 0)) |> Enum.min_by(& &1.bound, fn -> nil end)
-  IO.puts("done in #{now.() - started} ms on #{length(final.results)} node(s) of #{wanted} started (#{map_size(final.workers)} registered); #{final.steals} steal(s), #{MapSet.size(final.done)} of #{total} subproblems done, #{final.wasted} redone copies discarded, #{final.reordered} finish(es) reordered by their stamps")
-  for r <- Enum.sort_by(final.results, &{&1.kind, -&1.nodes}),
-      do: IO.puts("  #{r.kind} node: #{Map.get(final.finished_by, r.pid, 0)} subproblems, nodes #{r.nodes} fails #{r.fails} solutions #{r.solutions} bound #{r.bound} exhaustive #{r.exhaustive}")
-  IO.puts("total nodes #{Enum.sum(Enum.map(final.results, & &1.nodes))} solutions #{Enum.sum(Enum.map(final.results, & &1.solutions))}")
-  if best && objective >= 0 do
-    [lower, upper] = best.store |> Enum.at(objective) |> String.split()
-    IO.puts("objective [#{lower}, #{upper}]")
-  else
-    IO.puts("no solution")
+
+  defp extra_replica(%{steal?: false}, _pid, _open), do: nil
+  defp extra_replica(data, pid, open) do
+    done = data.nodes[pid].done_jobs
+    slower? = fn job -> MapSet.size(job.runners) > 0 and Enum.all?(job.runners, &(data.nodes[&1].done_jobs < done)) end
+    case open |> Enum.filter(fn {_index, job} -> slower?.(job) end) |> Enum.min_by(fn {_index, job} -> job.sequence end, fn -> nil end) do
+      {index, _job} -> index
+      nil -> nil
+    end
+  end
+
+  defp serve(data, pid) do
+    cond do
+      MapSet.member?(data.banned, pid) or data.nodes[pid] == nil or data.nodes[pid].job != nil -> data
+      true -> hand(data, pid, pick(data, pid))
+    end
+  end
+
+  defp hand(data, pid, {:job, index, kind}), do: assign(%{data | waiting: MapSet.delete(data.waiting, pid)}, pid, index, kind)
+  defp hand(data, pid, :wait), do: %{data | waiting: MapSet.put(data.waiting, pid)}
+  defp hand(data, pid, :done) do
+    send(pid, {:to_host, "D", Hlc.send()})
+    %{data | waiting: MapSet.delete(data.waiting, pid)}
+  end
+
+  defp assign(data, pid, index, kind) do
+    data = if kind == :new, do: open_job(data, index), else: data
+    job = data.jobs[index]
+    send(pid, {:to_host, "S #{index} #{job.bound}", Hlc.send()})
+    Hlc.trace("assign", "job=#{index} to=#{inspect(pid)} kind=#{kind}")
+    node = data.nodes[pid]
+    job = %{job | tried: MapSet.put(job.tried, pid), runners: MapSet.put(job.runners, pid)}
+    %{data | jobs: Map.put(data.jobs, index, job), nodes: Map.put(data.nodes, pid, %{node | job: index, cancelled: false}),
+             extra: data.extra + if(kind == :extra, do: 1, else: 0)}
+  end
+
+  # The bound a job is given is fixed here, from accepted answers only, so every replica of it gets the same one.
+  defp open_job(data, index) do
+    job = %{bound: data.bound, tried: MapSet.new(), runners: MapSet.new(), answers: %{}, accepted: nil, demand: data.faults + 1, sequence: data.sequence}
+    %{data | jobs: Map.put(data.jobs, index, job), next: index + 1, sequence: data.sequence + 1}
+  end
+
+  # ---- after every event
+
+  defp settle(data) do
+    data = Enum.reduce(Enum.sort(data.waiting), data, &serve(&2, &1))
+    cond do
+      MapSet.size(data.alive) == 0 and data.results != [] and stuck_job(data) == nil -> finish(data)
+      stuck_job(data) != nil and idle?(data) -> no_quorum(data, stuck_job(data))
+      true -> {:keep_state, data}
+    end
+  end
+
+  defp stuck_job(data), do: Enum.find(Enum.sort(data.jobs), fn {_index, job} -> job.accepted == nil end)
+
+  # Nothing is running and every node that could still work is waiting (or none is left).
+  defp idle?(data) do
+    working = for {pid, node} <- data.nodes, not MapSet.member?(data.banned, pid), MapSet.member?(data.alive, pid), node.job != nil, do: pid
+    able = for {pid, _node} <- data.nodes, not MapSet.member?(data.banned, pid), MapSet.member?(data.alive, pid), do: pid
+    working == [] and Enum.all?(able, &MapSet.member?(data.waiting, &1))
+  end
+
+  defp no_quorum(data, {index, job}) do
+    IO.puts("no quorum for subproblem #{index}: #{data.faults + 1} equal answers needed, answers #{inspect(Map.values(job.answers))}, #{MapSet.size(job.tried)} node(s) tried it, #{MapSet.size(data.waiting)} waiting")
+    for pid <- data.alive, do: send(pid, {:to_host, "D", Hlc.send()})
+    summary(data)
+    {:stop, {:shutdown, :no_quorum}}
+  end
+
+  defp finish(data) do
+    summary(data)
+    if data.bound < @infinity, do: IO.puts("objective [#{data.bound}, #{data.bound}]"), else: IO.puts("no solution")
+    {:stop, :normal}
+  end
+
+  # The objective is the smallest accepted bound: it rests on f + 1 equal answers, never on one node's final report.
+  defp summary(data) do
+    honest = Enum.reject(data.results, &MapSet.member?(data.banned, &1.pid))
+    elapsed = System.monotonic_time(:millisecond) - data.started
+    IO.puts("done in #{elapsed} ms on #{length(honest)} node(s) of #{data.wanted} started; #{data.accepted} of #{data.total} subproblems accepted with #{data.faults + 1} equal answers (the rest skipped), #{data.extra} extra replica(s), #{data.frauds} fraud(s), #{MapSet.size(data.banned)} node(s) banned")
+    for report <- Enum.sort_by(honest, &{&1.kind, -&1.nodes}),
+        do: IO.puts("  #{report.kind} node: nodes #{report.nodes} fails #{report.fails} solutions #{report.solutions} exhaustive #{report.exhaustive}")
+    IO.puts("total nodes #{Enum.sum(Enum.map(honest, & &1.nodes))} solutions #{Enum.sum(Enum.map(honest, & &1.solutions))}")
   end
 end
 
-# The worker is a gen_statem with two states. In `ready` frames go through to the guest host. With --hold-first-job the first assignment is kept instead (the node is busy
-# elsewhere) and the worker is `held`: it answers a cancel for the host with the finished frame and is ready again; every other frame still goes through.
+# The worker: a gen_statem with two states. In `ready` frames go through to the guest host. With --hold-first-job the first assignment is kept instead (the node is
+# busy elsewhere) and the worker is `held`: it answers a cancel for the host with the waiting frame and is ready again; every other frame still goes through.
 defmodule Turbo.Worker do
   @moduledoc false
   @behaviour :gen_statem
+  alias Turbo.Hlc
 
   def start(args), do: :gen_statem.start_link(__MODULE__, args, [])
 
@@ -236,59 +355,65 @@ defmodule Turbo.Worker do
   def callback_mode, do: :state_functions
 
   @impl true
-  def init(%{coord: coord, guest: guest, host: host, budget: budget, frame_env: frame_env} = args) do
-    true = Node.connect(coord)
-    Node.monitor(coord, true)
+  def init(%{coordinator: coordinator, guest: guest, host: host, budget: budget, frame_env: frame_env} = args) do
+    true = Node.connect(coordinator)
+    Node.monitor(coordinator, true)
     port = Port.open({:spawn_executable, host}, [:binary, :exit_status, {:packet, 4}, {:env, frame_env}, {:args, [guest, Integer.to_string(budget)]}])
-    {:ok, :ready, Map.merge(args, %{port: port, held: nil, spent: false})}
+    {:ok, :ready, Map.merge(args, %{port: port, held: nil, spent: false, assigned: 0})}
   end
 
-  def ready(:info, {:to_host, frame, w}, data) do
-    Turbo.Hlc.recv(w)
-    assignment? = String.starts_with?(frame, "S ")
+  def ready(:info, {:to_host, <<"S ", _::binary>> = frame, stamp}, data) do
+    Hlc.recv(stamp)
     cond do
-      assignment? and data.die_first ->
+      data.die_first ->
         IO.puts("worker #{node()} dies on its first assignment")
         System.halt(1)
-      assignment? and data.hold_first and not data.spent ->
-        Turbo.Hlc.trace("hold", String.slice(frame, 0, 12))
+      data.hold_first and not data.spent ->
+        Hlc.trace("hold", String.slice(frame, 0, 12))
         {:next_state, :held, %{data | held: frame, spent: true}}
       true ->
         Port.command(data.port, frame)
-        :keep_state_and_data
+        {:keep_state, %{data | assigned: data.assigned + 1}}
     end
   end
+  def ready(:info, {:to_host, frame, stamp}, data), do: forward(frame, stamp, data)
   def ready(:info, event, data), do: common(event, data)
 
-  def held(:info, {:to_host, "C", w}, data) do
-    Turbo.Hlc.recv(w)
+  def held(:info, {:to_host, "C", stamp}, data) do
+    Hlc.recv(stamp)
     [_, _, bound] = String.split(data.held)
-    Turbo.Hlc.trace("release", "cancelled while held")
-    send({:turbo_coordinator, data.coord}, {:from_worker, self(), "A 0 #{bound} 0 0", Turbo.Hlc.send()})
+    Hlc.trace("release", "cancelled while held")
+    report(data, "A 0 #{bound} 0 0")
     {:next_state, :ready, %{data | held: nil}}
   end
-  def held(:info, {:to_host, frame, w}, data) do
-    Turbo.Hlc.recv(w)
+  def held(:info, {:to_host, frame, stamp}, data), do: forward(frame, stamp, data)
+  def held(:info, event, data), do: common(event, data)
+
+  defp forward(frame, stamp, data) do
+    Hlc.recv(stamp)
     Port.command(data.port, frame)
     :keep_state_and_data
   end
-  def held(:info, event, data), do: common(event, data)
+
+  defp report(data, frame), do: send({:turbo_coordinator, data.coordinator}, {:from_worker, self(), frame, Hlc.send()})
 
   defp common({port, {:data, "H"}}, %{port: port} = data) do
-    send({:turbo_coordinator, data.coord}, {:hello, self(), data.kind, Turbo.Hlc.send()})
+    send({:turbo_coordinator, data.coordinator}, {:hello, self(), data.kind, Hlc.send()})
     :keep_state_and_data
   end
-  defp common({:problem, text, w}, data) do
-    Turbo.Hlc.recv(w)
-    Port.command(data.port, "P " <> text)
-    :keep_state_and_data
+  defp common({:problem, text, stamp}, data), do: forward("P " <> text, stamp, data)
+  # a node that lies: --lie answers every subproblem wrongly, --lie-times N only its first N answers (a flaky node)
+  defp common({port, {:data, <<"A ", rest::binary>>}}, %{port: port, lies: lies, assigned: assigned} = data) when lies > 0 and assigned > 0 do
+    [skip, bound, solutions, nodes] = rest |> String.split() |> Enum.map(&String.to_integer/1)
+    report(data, "A #{skip} #{bound - 1} #{solutions} #{nodes + 1}")
+    {:keep_state, %{data | lies: lies - 1, assigned: assigned - 1}}
   end
   defp common({port, {:data, frame}}, %{port: port} = data) do
-    Turbo.Hlc.trace("send", String.slice(frame, 0, 12))
-    send({:turbo_coordinator, data.coord}, {:from_worker, self(), frame, Turbo.Hlc.send()})
+    Hlc.trace("send", String.slice(frame, 0, 12))
+    report(data, frame)
     if String.starts_with?(frame, "R "), do: {:stop, :normal}, else: :keep_state_and_data
   end
-  defp common({:nodedown, coord}, %{coord: coord}), do: System.halt(0)
+  defp common({:nodedown, coordinator}, %{coordinator: coordinator}), do: System.halt(0)
   defp common({port, {:exit_status, code}}, %{port: port}) do
     if code != 0, do: IO.puts("host exited with #{code}")
     {:stop, :normal}
@@ -296,52 +421,78 @@ defmodule Turbo.Worker do
   defp common(_other, _data), do: :keep_state_and_data
 end
 
-work = fn coord, guest, host_bin, budget, kind ->
+problem_text = fn cp_path, power ->
+  {out, 0} = System.cmd("elixir", [Path.join(root, "tools/turbo_solve.exs"), cp_path, "--prepare", "--power", Integer.to_string(power)], env: [{"ELIXIR_ERL_OPTIONS", "+fnu"}])
+  File.read!(Path.join(out |> String.split("\n", trim: true) |> List.last(), "input.txt"))
+end
+
+# Run a machine to its end and give its stop reason.
+await = fn {:ok, pid} ->
+  reference = Process.monitor(pid)
+  receive do
+    {:DOWN, ^reference, :process, ^pid, reason} -> reason
+  end
+end
+
+coordinate = fn cp_path, power, wanted ->
+  # --problem FILE hands over the solver's input text as it is (a fixture), so the coordinator needs no solver build
+  text = case Keyword.get(opts, :problem) do
+    nil -> problem_text.(cp_path, power)
+    file -> File.read!(file)
+  end
+  strikes = Keyword.get(opts, :strikes, 3)
+  Process.flag(:trap_exit, true)
+  reason = await.(Turbo.Coordinator.start(%{text: text, total: Bitwise.bsl(1, power), wanted: wanted, faults: Keyword.get(opts, :replicas, 2) - 1,
+    steal?: not Keyword.get(opts, :no_steal, false), strike_limit: strikes, forgive_after: Keyword.get(opts, :forgive_after, 3),
+    lifetime_limit: Keyword.get(opts, :lifetime_strikes, 2 * strikes)}))
+  if reason != :normal, do: System.halt(1)
+end
+
+work = fn coordinator, guest, host, budget, kind ->
   frame_env = case Keyword.get(opts, :frame_ms) do
     nil -> []
     ms -> [{~c"TURBO_FRAME_MS", ~c"#{ms}"}]
   end
-  {:ok, pid} = Turbo.Worker.start(%{coord: coord, guest: guest, host: host_bin, budget: budget, frame_env: frame_env, kind: kind,
-                                   hold_first: Keyword.get(opts, :hold_first_job, false), die_first: Keyword.get(opts, :die_at_first_job, false)})
-  ref = Process.monitor(pid)
-  receive do
-    {:DOWN, ^ref, :process, ^pid, _} -> :ok
-  end
+  lies = if Keyword.get(opts, :lie, false), do: 1_000_000_000, else: Keyword.get(opts, :lie_times, 0)
+  Process.flag(:trap_exit, true)
+  await.(Turbo.Worker.start(%{coordinator: coordinator, guest: guest, host: host, budget: budget, frame_env: frame_env, kind: kind, lies: lies,
+    hold_first: Keyword.get(opts, :hold_first_job, false), die_first: Keyword.get(opts, :die_at_first_job, false)}))
+end
+
+# A node is started in one place: the port mapper first (the one beside this VM), because a VM that becomes a node while running does not launch it, and on a host
+# where a connect to a closed loopback port hangs instead of being refused the node start would wait for ever.
+start_node = fn name ->
+  System.cmd(Path.join([:code.root_dir(), "erts-#{:erlang.system_info(:version)}", "bin", "epmd"]), ["-daemon"])
+  {:ok, _} = Node.start(name, :longnames)
+  Node.set_cookie(String.to_atom(cookie))
 end
 
 case role do
   "coordinator" ->
     [cp_path] = args
-    Node.start(String.to_atom(System.get_env("NODE_NAME", "coord@127.0.0.1")), :longnames)
-    Node.set_cookie(String.to_atom(cookie))
+    start_node.(String.to_atom(System.get_env("NODE_NAME", "coord@127.0.0.1")))
     coordinate.(cp_path, Keyword.get(opts, :power, 0), Keyword.get(opts, :workers, 1))
   "worker" ->
-    [coord, guest, host_bin] = args
+    [coordinator, guest, host] = args
     name = System.get_env("NODE_NAME", "w#{System.unique_integer([:positive])}@127.0.0.1")
-    Node.start(String.to_atom(name), :longnames)
-    Node.set_cookie(String.to_atom(cookie))
-    work.(String.to_atom(coord), guest, host_bin, Keyword.get(opts, :budget, 50_000_000), Keyword.get(opts, :kind, "cpu"))
+    start_node.(String.to_atom(name))
+    work.(String.to_atom(coordinator), guest, host, Keyword.get(opts, :budget, 50_000_000), Keyword.get(opts, :kind, "cpu"))
   "local" ->
     [cp_path] = args
     spec = Keyword.get(opts, :nodes, "cpu:#{Keyword.get(opts, :workers, 2)}")
     kinds = spec |> String.split(",") |> Enum.flat_map(fn part -> [kind, count] = String.split(part, ":"); List.duplicate(kind, String.to_integer(count)) end)
     guest = Keyword.get(opts, :guest, Path.join(runs, "guest/turbo_guest.elf"))
-    host_bin = Keyword.get(opts, :host, Path.join(runs, "host-build/turbo_host"))
-    slow_us = Keyword.get(opts, :slow_us, 0)
-    Node.start(:"coord@127.0.0.1", :longnames)
-    Node.set_cookie(String.to_atom(cookie))
+    host = Keyword.get(opts, :host, Path.join(runs, "host-build/turbo_host"))
+    frame = case Keyword.get(opts, :frame_ms) do nil -> []; ms -> ["--frame-ms", to_string(ms)] end
+    start_node.(:"coord@127.0.0.1")
     ports =
-      for {kind, k} <- Enum.with_index(kinds, 1) do
-        throttled = kind == "cpu" and slow_us > 0
-        budget = if throttled, do: 1_000_000, else: Keyword.get(opts, :budget, 50_000_000)
-        env = [{~c"NODE_NAME", ~c"w#{k}@127.0.0.1"}, {~c"ELIXIR_ERL_OPTIONS", ~c"+fnu"}] ++
-              (if throttled, do: [{~c"TURBO_SLEEP_US", ~c"#{slow_us}"}], else: []) ++
-              []
+      for {kind, number} <- Enum.with_index(kinds, 1) do
+        dies = if number == 2 and Keyword.get(opts, :kill_one, false), do: ["--die-at-first-job"], else: []
+        worker = ["worker", "coord@127.0.0.1", guest, host, "--budget", Integer.to_string(Keyword.get(opts, :budget, 50_000_000)), "--kind", kind, "--cookie", cookie]
         Port.open({:spawn_executable, System.find_executable("nice")},
-          [:binary, :exit_status,
-           {:args, ["-n", "19", System.find_executable("elixir"), Path.join(root, "tools/turbo_cluster.exs"), "worker", "coord@127.0.0.1", guest, host_bin,
-                    "--budget", Integer.to_string(budget), "--kind", kind, "--cookie", cookie] ++ (if k == 2 and Keyword.get(opts, :kill_one, false), do: ["--die-at-first-job"], else: []) ++ (case Keyword.get(opts, :frame_ms) do nil -> []; ms -> ["--frame-ms", to_string(ms)] end)}, {:env, env}])
+          [:binary, :exit_status, {:env, [{~c"NODE_NAME", ~c"w#{number}@127.0.0.1"}, {~c"ELIXIR_ERL_OPTIONS", ~c"+fnu"}]},
+           {:args, ["-n", "19", System.find_executable("elixir"), Path.join(root, "tools/turbo_cluster.exs")] ++ worker ++ dies ++ frame}])
       end
     coordinate.(cp_path, Keyword.get(opts, :power, 0), length(kinds))
-    for p <- ports, Port.info(p) != nil, do: Port.close(p)
+    for port <- ports, Port.info(port) != nil, do: Port.close(port)
 end
