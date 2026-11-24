@@ -3,7 +3,7 @@
 // SPDX-FileCopyrightText: 2021 Pierre Talbot, Frédéric Pinel
 // SPDX-License-Identifier: Apache-2.0 AND MIT
 // Runs the solver guest ELF under libriscv and talks to a worker node over stdin and stdout in length-prefixed frames (an Erlang Port with {packet, 4}).
-// host to worker: "H" hello | "A skip bound solutions nodes" (the guest waits for a subproblem; bound is this guest's best) | "U bound" a better bound than the last report | "R nodes fails solutions bound depth_max exhaustive" then n lines "lower upper"
+// host to worker: "H" hello | "A skip bound solutions nodes" (the guest waits for a subproblem; the four numbers are the answer of the subproblem it just ran) | "U bound" a better bound than the last report | "R nodes fails solutions bound depth_max exhaustive" then n lines "lower upper"
 // worker to host: "P" problem text | "S index bound" assign a subproblem | "D" no more subproblems | "B bound" a better bound found elsewhere | "C" cancel the subproblem in hand (another node finished it) | "X" stop
 // TURBO_FRAME_MS (compute time per frame) and TURBO_FRAME_HZ (default 64) run the guest in frames: each window gets an instruction budget calibrated to that compute time, then the host sleeps to the next frame edge; window statistics go to stderr at exit.
 // TURBO_SLEEP_US makes the host sleep that long after every budget window, to imitate a slower node.
@@ -48,6 +48,7 @@ struct Link {
 	uint64_t control = 0, state = 0;
 	int bound = INT_MAX;
 	int reported = INT_MAX;
+	int solutions_before = 0, nodes_before = 0; // the guest's running counters when the job in hand began
 	bool stop = false;
 };
 static Link lnk;
@@ -57,6 +58,25 @@ static void puti(M& m, uint64_t addr, int index, int v) { m.copy_to_guest(addr +
 static void apply_bound(M& m, Link& l, int bound) {
 	if (bound < l.bound) l.bound = bound;
 	if (l.control && l.bound < geti(m, l.control, 11)) puti(m, l.control, 11, l.bound);
+}
+// A subproblem's answer must depend only on the problem, the subproblem's index and the bound it is assigned with, so that any node can replay it and a different
+// answer is a proof of a fault. Everything the guest keeps from one subproblem to the next and that the search or the answer reads is set here, and nowhere else:
+//   control[10]  the first subproblem not made unreachable (a running maximum in the guest: the answer's `skip` is this subproblem's alone)
+//   control[11]  the approximate best bound, and state[5] the block's own best: both become the assigned bound
+//   control[15]  the cancel request
+// The counters (state[6] solutions, state[7] nodes) keep running in the guest; their values at the start of the job are kept here, and the waiting frame reports the
+// differences, so an answer carries this subproblem's counts and nothing of the ones before. tools/cluster_replay.exs checks the property itself: every subproblem,
+// on three hosts, in three different orders, gives the same answer.
+static void begin_job(M& m, Link& l, uint64_t control, uint64_t state, int index, int bound) {
+	l.bound = bound;
+	puti(m, control, 10, 0);
+	puti(m, control, 11, bound);
+	puti(m, control, 15, 0);
+	puti(m, state, 5, bound);
+	puti(m, state, 9, index);
+	puti(m, state, 16, 1);
+	l.solutions_before = geti(m, state, 6);
+	l.nodes_before = geti(m, state, 7);
 }
 
 int main(int argc, char** argv) {
@@ -76,7 +96,7 @@ int main(int argc, char** argv) {
 	M::install_syscall_handler(501, [](M& m) {
 		auto [control, state] = m.sysargs<uint64_t, uint64_t>();
 		lnk.control = control; lnk.state = state;
-		write_frame("A " + std::to_string(geti(m, control, 10)) + " " + std::to_string(geti(m, state, 5)) + " " + std::to_string(geti(m, state, 6)) + " " + std::to_string(geti(m, state, 7)));
+		write_frame("A " + std::to_string(geti(m, control, 10)) + " " + std::to_string(geti(m, state, 5)) + " " + std::to_string(geti(m, state, 6) - lnk.solutions_before) + " " + std::to_string(geti(m, state, 7) - lnk.nodes_before));
 		for (;;) {
 			std::string frame;
 			if (!read_frame(frame) || frame[0] == 'X') { lnk.stop = true; m.stop(); return; }
@@ -84,10 +104,7 @@ int main(int argc, char** argv) {
 			if (frame[0] == 'S') {
 				int index, bound;
 				sscanf(frame.c_str() + 2, "%d %d", &index, &bound);
-				apply_bound(m, lnk, bound);
-				puti(m, state, 9, index);
-				puti(m, state, 16, 1);
-				puti(m, control, 15, 0);
+				begin_job(m, lnk, control, state, index, bound);
 				return;
 			}
 			if (frame[0] == 'D') { puti(m, state, 16, 5); return; }
