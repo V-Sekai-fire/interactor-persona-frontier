@@ -1,7 +1,9 @@
-{"version": "1.2.0",
+{
+ "version": "1.2.0",
  "packagesDir": ".lake/packages",
- "packages":
- [{"url": "https://github.com/V-Sekai-fire/lean-yaml-ld",
+ "packages": [
+  {
+   "url": "https://github.com/V-Sekai-fire/lean-yaml-ld",
    "type": "git",
    "subDir": null,
    "scope": "",
@@ -10,8 +12,10 @@
    "manifestFile": "lake-manifest.json",
    "inputRev": "main",
    "inherited": false,
-   "configFile": "lakefile.lean"},
-  {"url": "https://github.com/V-Sekai-fire/interactor-taskweft-persona",
+   "configFile": "lakefile.lean"
+  },
+  {
+   "url": "https://github.com/V-Sekai-fire/interactor-taskweft-persona",
    "type": "git",
    "subDir": null,
    "scope": "",
@@ -20,29 +24,37 @@
    "manifestFile": "lake-manifest.json",
    "inputRev": "main",
    "inherited": false,
-   "configFile": "lakefile.lean"},
-  {"type": "path",
+   "configFile": "lakefile.lean"
+  },
+  {
+   "type": "path",
    "scope": "",
    "name": "a2a",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir": ".lake/packages/persona/thirdparty/a2a",
-   "configFile": "lakefile.lean"},
-  {"type": "path",
+   "configFile": "lakefile.lean"
+  },
+  {
+   "type": "path",
    "scope": "",
    "name": "character",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir": ".lake/packages/persona/thirdparty/character-domain-c-abi",
-   "configFile": "lakefile.lean"},
-  {"type": "path",
+   "configFile": "lakefile.lean"
+  },
+  {
+   "type": "path",
    "scope": "",
    "name": "taskweft",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir": ".lake/packages/persona/thirdparty/rectgtn-domain-c-abi",
-   "configFile": "lakefile.lean"},
-  {"url": "https://github.com/V-Sekai-fire/plausible-witness-dag",
+   "configFile": "lakefile.lean"
+  },
+  {
+   "url": "https://github.com/V-Sekai-fire/plausible-witness-dag",
    "type": "git",
    "subDir": null,
    "scope": "",
@@ -51,8 +63,10 @@
    "manifestFile": "lake-manifest.json",
    "inputRev": "main/main",
    "inherited": true,
-   "configFile": "lakefile.lean"},
-  {"url": "https://github.com/leanprover-community/plausible",
+   "configFile": "lakefile.lean"
+  },
+  {
+   "url": "https://github.com/leanprover-community/plausible",
    "type": "git",
    "subDir": null,
    "scope": "",
@@ -61,7 +75,46 @@
    "manifestFile": "lake-manifest.json",
    "inputRev": "v4.34.0",
    "inherited": true,
-   "configFile": "lakefile.toml"}],
+   "configFile": "lakefile.toml"
+  },
+  {
+   "url": "https://github.com/V-Sekai-fire/contract-entity-packet",
+   "type": "git",
+   "subDir": null,
+   "scope": "",
+   "rev": "fe7a9627a9b23134f998a50cd854e9cc6743c536",
+   "name": "entity_packet",
+   "manifestFile": "lake-manifest.json",
+   "inputRev": "fe7a9627a9b23134f998a50cd854e9cc6743c536",
+   "inherited": false,
+   "configFile": "lakefile.toml"
+  },
+  {
+   "url": "https://github.com/leanprover-community/plausible",
+   "type": "git",
+   "subDir": null,
+   "scope": "",
+   "rev": "118aa17ee84656b8bd727fef7c458ee8c833385c",
+   "name": "Plausible",
+   "manifestFile": "lake-manifest.json",
+   "inputRev": "v4.34.0",
+   "inherited": true,
+   "configFile": "lakefile.toml"
+  },
+  {
+   "url": "https://github.com/V-Sekai-fire/contract-lean-slang",
+   "type": "git",
+   "subDir": null,
+   "scope": "",
+   "rev": "01dbd396639f3ea44c87bef209a1449bd8d12844",
+   "name": "LeanSlang",
+   "manifestFile": "lake-manifest.json",
+   "inputRev": "01dbd396639f3ea44c87bef209a1449bd8d12844",
+   "inherited": false,
+   "configFile": "lakefile.lean"
+  }
+ ],
  "name": "frontier",
  "lakeDir": ".lake",
- "fixedToolchain": false}
+ "fixedToolchain": false
+}

@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+# SPDX-License-Identifier: Apache-2.0 OR MIT
+# One image for every node of the cluster test: Erlang and Elixir, the guest host (libriscv with binary translation, which needs a C++ compiler at run time),
+# the prebuilt solver guest ELF and the scout fixture. Build from the repository root: docker build -f deploy/cluster/Containerfile -t turbo-cluster .
+FROM elixir:1.18
+RUN apt-get update && apt-get install -y --no-install-recommends cmake g++ git ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN git clone --filter=blob:none https://github.com/libriscv/libriscv /opt/libriscv && git -C /opt/libriscv checkout 0d8979233df6bdc2d029d46b92ff8e36e43d4b42
+COPY guest/host /src/guest/host
+RUN cmake -S /src/guest/host -B /opt/host -DLIBRISCV=/opt/libriscv -DCMAKE_BUILD_TYPE=Release && cmake --build /opt/host -j4
+WORKDIR /repo
+COPY tools tools
+COPY frontend/fixtures frontend/fixtures
+COPY guest/prebuilt guest/prebuilt
+ENV ELIXIR_ERL_OPTIONS=+fnu
+# a node started inside a running VM (Node.start) does not launch the port mapper itself: start it before the command
+ENTRYPOINT ["/bin/sh", "-c", "epmd -daemon; exec \"$@\"", "--"]

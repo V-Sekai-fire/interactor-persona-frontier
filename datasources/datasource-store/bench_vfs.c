@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 // Load and time the FoundationDB VFS against SQLite on a local file.
 //
 //   bench_vfs <rows>

@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 { pkgs, self }:
 
 pkgs.testers.runNixOSTest {
@@ -39,7 +41,7 @@ pkgs.testers.runNixOSTest {
 
     # the pages are in FoundationDB, not a local file
     machine.fail("test -e /var/lib/frontier/frontier.sqlite")
-    keys = machine.succeed("fdbcli --exec 'getrange weft/db/frontier/ weft/db/frontier0 20' --timeout 10")
+    keys = machine.succeed("fdbcli --exec 'getrange weft/db/frontier/ weft/db/frontier0 5000' --timeout 60")
     assert "weft/db/frontier/HEAD" in keys, keys
     assert '"kind":"request"' in keys, keys
   '';

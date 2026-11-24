@@ -1,3 +1,5 @@
+-- SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+-- SPDX-License-Identifier: Apache-2.0 OR MIT
 import Lean.Data.Json
 import Frontier.Seed
 /-!
@@ -30,8 +32,27 @@ def sql (q : String) : IO (Array Json) := do
     | _ => throw (IO.userError s!"sql: {out}")
   | .error e => throw (IO.userError s!"sql: {e}: {out}")
 
+/-- The numbered `.sql` files of `datasources/sqlite/migrations`, in order. -/
+def migrationFiles : IO (Array System.FilePath) := do
+  let entries ← System.FilePath.readDir "datasources/sqlite/migrations"
+  let files := entries.filter (·.path.extension == some "sql") |>.map (·.path)
+  pure (files.qsort (·.toString < ·.toString))
+
+def applied (name : String) : IO Bool := do
+  let rows ← sql s!"SELECT 1 FROM schema_migrations WHERE name = {quote name};"
+  pure (!rows.isEmpty)
+
+/-- One migration and its ledger row in one transaction, so a failed file leaves nothing behind. -/
+def migrate (file : System.FilePath) : IO Unit := do
+  let name := file.fileName.getD file.toString
+  if !(← applied name) then
+    let text ← IO.FS.readFile file
+    let _ ← sql s!"BEGIN; {text}\nINSERT INTO schema_migrations (name) VALUES ({quote name}); COMMIT;"
+
 def init : IO Unit := do
+  let _ ← sql "CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY, at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')));"
   let _ ← sql "CREATE TABLE IF NOT EXISTS traces (id INTEGER PRIMARY KEY, at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')), kind TEXT NOT NULL, body TEXT NOT NULL); CREATE TABLE IF NOT EXISTS knowledge (id INTEGER PRIMARY KEY CHECK (id = 1), body TEXT NOT NULL, revision INTEGER NOT NULL);"
+  for f in ← migrationFiles do migrate f
 
 def insertTrace (kind : String) (body : Json) : IO Unit := do
   let _ ← sql s!"INSERT INTO traces (kind, body) VALUES ({quote kind}, {quote body.compress});"

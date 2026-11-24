@@ -2,7 +2,7 @@ cff-version: 1.2.0
 title: interactor-persona-frontier
 message: If you use this software, please cite it as below.
 type: software
-license: MIT
+license: Apache-2.0 OR MIT
 authors:
   - family-names: Lee
     given-names: K. S. Ernest (iFire)

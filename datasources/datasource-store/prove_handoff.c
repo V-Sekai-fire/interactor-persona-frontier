@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 // Prove the property the store decision rests on: an actor's database has no
 // local file, so a different process reads it with no copy and no restore.
 //

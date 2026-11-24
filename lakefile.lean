@@ -1,3 +1,5 @@
+-- SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+-- SPDX-License-Identifier: Apache-2.0 OR MIT
 import Lake
 open Lake DSL
 
@@ -6,6 +8,10 @@ package «frontier» where
 
 -- The planner and its JSON-LD domain reader, as a library.
 require persona from git "https://github.com/V-Sekai-fire/interactor-taskweft-persona" @ "main"
+-- The integral fabric entity packet, MIT: the command packets the plan is sent as.
+require entity_packet from git "https://github.com/V-Sekai-fire/contract-entity-packet" @ "fe7a9627a9b23134f998a50cd854e9cc6743c536"
+-- The Lean AST that prints Slang: the Turbo propagator is written in Lean and emitted as a shader, not kept as hand-written Slang.
+require LeanSlang from git "https://github.com/V-Sekai-fire/contract-lean-slang" @ "01dbd396639f3ea44c87bef209a1449bd8d12844"
 
 -- YAML-LD in and out: the fixtures and domains in entities/ are .yamlld only.
 require «lean-yaml-ld» from git "https://github.com/V-Sekai-fire/lean-yaml-ld" @ "main"
@@ -58,7 +64,7 @@ lean_lib «Entities» where
 
 lean_lib «Repositories» where
   srcDir := "repositories"
-  roots := #[`Frontier.Db]
+  roots := #[`Frontier.Db, `Frontier.Store, `Frontier.Import, `Frontier.PlanPackets]
 
 -- SQLite is vendored and compiled in; only libdl and libm are needed beside it on Linux.
 def sqliteLink : Array String :=
@@ -78,3 +84,32 @@ lean_exe «frontier_witness» where
   srcDir := "entities/spec"
   root := `Witness
   moreLinkArgs := sqliteLink
+
+-- The stored documents: migrate the database, print a stored domain or problem, plan a stored problem.
+@[default_target]
+lean_exe «frontier_store» where
+  srcDir := "transports"
+  root := `StoreMain
+  moreLinkArgs := sqliteLink
+
+-- A plan's steps as 100-byte entity packets, decoded back and checked.
+@[default_target]
+lean_exe «frontier_packets» where
+  srcDir := "transports"
+  root := `PacketsMain
+  moreLinkArgs := sqliteLink
+-- The Turbo propagator written in Lean and printed as Slang with contract-lean-slang.
+lean_lib «Turbo» where
+  srcDir := "turbo"
+  roots := #[`Turbo.Pir, `Turbo.Fixpoint, `Turbo.Solve, `Turbo.Coop]
+lean_exe «turbo_emit» where
+  srcDir := "turbo"
+  root := `EmitMain
+
+-- The FlatZinc front end of Turbo (lala-parsing and lala-core's formula), written in Lean.
+lean_lib «Frontend» where
+  srcDir := "frontend"
+  roots := #[`Frontend.Formula, `Frontend.Fzn, `Frontend.Ternarize, `Frontend.Interval, `Frontend.Simplify, `Frontend.Output]
+lean_exe «frontier_frontend» where
+  srcDir := "frontend"
+  root := `FrontendMain

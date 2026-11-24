@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 // The one C shim: SQLite in, JSON rows out. Nothing else crosses the ABI.
 // FRONTIER_VFS_EXT names datasource-store's fdb_vfs_ext loadable extension; with it loaded,
 // a database URL of file:frontier?vfs=weft_fdb keeps the pages in FoundationDB.
@@ -74,6 +76,7 @@ LEAN_EXPORT lean_obj_res frontier_sql(b_lean_obj_arg db_s, b_lean_obj_arg sql_s)
   int rc = sqlite3_open_v2(db, &h, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_URI, NULL);
   if (rc != SQLITE_OK) { sb_str(&s, "{\"error\":"); sb_json(&s, h ? sqlite3_errmsg(h) : "open"); sb_str(&s, "}"); goto out; }
   sqlite3_busy_timeout(h, 5000);
+  sqlite3_exec(h, "PRAGMA foreign_keys=ON;", NULL, NULL, NULL);
   if (strstr(db, "vfs=weft_fdb")) sqlite3_exec(h, "PRAGMA journal_mode=MEMORY; PRAGMA locking_mode=EXCLUSIVE;", NULL, NULL, NULL);
   sb_str(&s, "{\"rows\":[");
   if (sqlite3_exec(h, sql, cb, &s, &err) != SQLITE_OK) {

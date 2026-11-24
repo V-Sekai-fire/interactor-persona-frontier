@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 # Derive this layout's parallel-commit spec from the vendored authority.
 #
 #   spec/tla/derive.sh > spec/tla/WeftParallelCommit.tla

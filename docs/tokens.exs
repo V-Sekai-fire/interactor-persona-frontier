@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 # The token ledger of interactor-persona-frontier, as an Elixir DSL.
 #
 #   elixir docs/tokens.exs            prints the schema and every tuple, and checks that each

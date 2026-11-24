@@ -1,4 +1,6 @@
 #!/usr/bin/env elixir
+# SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 # Every weight the pipeline runs, in one place, so one 4090 box can preload them and go offline.
 #   elixir deploy/weights.exs list                 the table: repo, files, bytes, which are not yet on hf:chibifire
 #   elixir deploy/weights.exs fetch <dir>          download everything into <dir>/<repo>/, resumable, then verify

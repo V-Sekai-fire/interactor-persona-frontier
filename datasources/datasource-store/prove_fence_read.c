@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 // Prove that a handle whose view of the store is stale is refused a read.
 //
 //   prove_fence_read writer <db>            a second writer takes the fence; the first one's read fails

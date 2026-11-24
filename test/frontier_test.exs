@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 defmodule FrontierTest do
   @moduledoc """
   The planner's answers hold for every goal StreamData can generate, called in-process through leanler.

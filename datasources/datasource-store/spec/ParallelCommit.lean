@@ -1,3 +1,5 @@
+-- SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+-- SPDX-License-Identifier: Apache-2.0 OR MIT
 /-! # Committing across several databases
 
 `ParallelCommits.tla` is the authority for this protocol, and it lives in a CockroachDB fork

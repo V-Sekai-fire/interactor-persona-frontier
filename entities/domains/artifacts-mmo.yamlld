@@ -1185,6 +1185,7 @@ methods:
         name: item
       - quantity
       - after
+    x-wraps: buy
   cancel-task-at:
     alternatives:
       - check: []
@@ -1201,6 +1202,7 @@ methods:
         name: c
       - enum: tile
         name: place
+    x-wraps: cancel-task
   complete-task-at:
     alternatives:
       - check: []
@@ -1217,6 +1219,23 @@ methods:
         name: c
       - enum: tile
         name: place
+    x-wraps: complete-task
+  consume:
+    alternatives:
+      - check: []
+        name: eat
+        subtasks:
+          - - use
+            - param: c
+            - param: item
+            - param: quantity
+    params:
+      - enum: char
+        name: c
+      - enum: item
+        name: item
+      - quantity
+    x-wraps: use
   craft-at:
     alternatives:
       - check: []
@@ -1245,6 +1264,7 @@ methods:
         name: item
       - quantity
       - after
+    x-wraps: craft
   deposit-gold-at:
     alternatives:
       - check: []
@@ -1263,6 +1283,7 @@ methods:
       - enum: tile
         name: place
       - quantity
+    x-wraps: deposit-gold
   deposit-item-at:
     alternatives:
       - check: []
@@ -1284,6 +1305,7 @@ methods:
       - enum: item
         name: item
       - quantity
+    x-wraps: deposit-item
   fight-at:
     alternatives:
       - check: []
@@ -1300,6 +1322,7 @@ methods:
         name: c
       - enum: tile
         name: place
+    x-wraps: fight
   gather-at:
     alternatives:
       - check: []
@@ -1326,6 +1349,7 @@ methods:
       - enum: item
         name: item
       - after
+    x-wraps: gather
   go-to:
     alternatives:
       - check:
@@ -1349,6 +1373,7 @@ methods:
         name: c
       - enum: tile
         name: place
+    x-wraps: move
   heal:
     alternatives:
       - check:
@@ -1368,6 +1393,7 @@ methods:
     params:
       - enum: char
         name: c
+    x-wraps: rest
   new-task-at:
     alternatives:
       - check: []
@@ -1384,6 +1410,7 @@ methods:
         name: c
       - enum: tile
         name: place
+    x-wraps: new-task
   recycle-at:
     alternatives:
       - check: []
@@ -1410,6 +1437,7 @@ methods:
       - enum: item
         name: item
       - quantity
+    x-wraps: recycle
   sell-at:
     alternatives:
       - check: []
@@ -1431,6 +1459,38 @@ methods:
       - enum: item
         name: item
       - quantity
+    x-wraps: sell
+  take-off:
+    alternatives:
+      - check: []
+        name: remove
+        subtasks:
+          - - unequip
+            - param: c
+            - param: slot
+    params:
+      - enum: char
+        name: c
+      - enum: slot
+        name: slot
+    x-wraps: unequip
+  wear:
+    alternatives:
+      - check: []
+        name: put-on
+        subtasks:
+          - - equip
+            - param: c
+            - param: item
+            - param: slot
+    params:
+      - enum: char
+        name: c
+      - enum: item
+        name: item
+      - enum: slot
+        name: slot
+    x-wraps: equip
   withdraw-gold-at:
     alternatives:
       - check: []
@@ -1449,6 +1509,7 @@ methods:
       - enum: tile
         name: place
       - quantity
+    x-wraps: withdraw-gold
   withdraw-item-at:
     alternatives:
       - check: []
@@ -1472,3 +1533,4 @@ methods:
         name: item
       - quantity
       - after
+    x-wraps: withdraw-item

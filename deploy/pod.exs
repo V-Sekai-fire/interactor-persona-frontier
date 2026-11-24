@@ -1,4 +1,6 @@
 #!/usr/bin/env elixir
+# SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 # One cell: FoundationDB + the node, colocated in one pod, sized to one s-1vcpu-2gb.
 #   elixir deploy/pod.exs up [name]      elixir deploy/pod.exs down [name]     elixir deploy/pod.exs smoke [name]
 # The box is 1 vCPU and 2 GB; the two containers get constant shares of it, with the rest left as headroom,

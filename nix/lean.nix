@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 { stdenv, fetchurl, zstd, autoPatchelfHook, zlib }:
 
 # The Lean toolchain the planner's lean-toolchain file names, from the official release, because the

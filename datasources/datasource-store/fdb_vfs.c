@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 // A SQLite VFS whose files live in FoundationDB.
 //
 // This is the store described in README.md, beside this file. There is no

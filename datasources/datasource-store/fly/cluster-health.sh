@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 # Gate the deploy roll on the cluster healing, the way the Kubernetes FDB
 # operator does: Fly advances a rolling deploy only when every machine check
 # passes, so this check failing after a restart holds the roll until
