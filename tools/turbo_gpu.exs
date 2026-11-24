@@ -1,7 +1,8 @@
 # Solve a dumped problem on the GPU with the cooperative Slang kernel (turbo/Turbo/Coop.lean): build the cubin and the CUDA host when they are stale, make the input, run
 # in bounded launches under a duty-cycle cap. The game on this machine uses the same GPU, so the run waits until the GPU is under --max-gpu percent busy.
+# `--prepare` builds and prints three lines (cubin, host binary, input folder) without running; tools/turbo_player.exs --engine gpu uses it.
 # Usage: elixir tools/turbo_gpu.exs <problem.cp> [--blocks N] [--power P] [--slice NODES] [--duty PERCENT] [--max-gpu PERCENT] [--stop-nodes N] [--max-launches N]
-{opts, [cp_path], _} = OptionParser.parse(System.argv(), strict: [blocks: :integer, power: :integer, slice: :integer, duty: :float, max_gpu: :integer, stop_nodes: :integer, max_launches: :integer, wait: :boolean])
+{opts, [cp_path], _} = OptionParser.parse(System.argv(), strict: [blocks: :integer, power: :integer, slice: :integer, duty: :float, max_gpu: :integer, stop_nodes: :integer, max_launches: :integer, wait: :boolean, prepare: :boolean])
 root = File.cwd!()
 sdk = Path.join(root, ".slang/2026.20")
 runs = "/mnt/fire/6-datasource/turbo-runs"
@@ -41,7 +42,7 @@ wait_until_free = fn wait_until_free ->
     end
   end
 end
-wait_until_free.(wait_until_free)
+if not Keyword.get(opts, :prepare, false), do: wait_until_free.(wait_until_free)
 
 text = run.(Path.join(root, ".lake/build/bin/turbo_emit"), ["solve-coop"], [])
 hash = :crypto.hash(:sha256, text <> File.read!(Path.join(root, "guest/gpu/turbo_gpu.cpp"))) |> Base.encode16()
@@ -58,6 +59,12 @@ end
 prepare_args = [Path.join(root, "tools/turbo_solve.exs"), cp_path, "--prepare", "--power", Integer.to_string(power)] ++
   (case Keyword.get(opts, :stop_nodes) do nil -> []; n -> ["--stop-nodes", Integer.to_string(n)] end)
 dir = System.cmd("elixir", prepare_args, env: [{"ELIXIR_ERL_OPTIONS", "+fnu"}]) |> elem(0) |> String.split("\n", trim: true) |> List.last()
+if Keyword.get(opts, :prepare, false) do
+  IO.puts(cubin)
+  IO.puts(host)
+  IO.puts(dir)
+  System.halt(0)
+end
 launch_env = [{"TURBO_GPU_DUTY", to_string(duty)}] ++ (case Keyword.get(opts, :max_launches) do nil -> []; n -> [{"TURBO_MAX_LAUNCHES", Integer.to_string(n)}] end)
 {out, status} = System.cmd(host, [cubin, Path.join(dir, "input.txt"), Integer.to_string(blocks), Integer.to_string(slice)], env: launch_env, stderr_to_stdout: true)
 IO.write(out)

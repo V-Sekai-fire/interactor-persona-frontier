@@ -1,11 +1,16 @@
 # Solve a dumped problem in time slices, planning each slice with the planner (domain turbo_solve, stored in SQLite) and only when the machine is free.
 # The game on this machine is real time: a slice is a bounded number of nodes at the lowest priority, the planner is asked again after every slice
 # (reentrant, like the replan loop of an HTN planner), and the whole search state is in a checkpoint file, so this tool can be stopped and started at any time.
+# --engine gpu runs the cooperative CUDA kernel instead (tools/turbo_gpu.exs builds it): the resident host takes "run N" launches per slice (--slice, default 10), each launch
+# --gpu-slice nodes per block (default 1, about a millisecond), under a duty cap (--duty, default 25 percent); its state is saved to the checkpoint every --save-every slices.
+# For that engine the gate is the GPU only, minus this process's own recent share.
 # Usage: elixir tools/turbo_player.exs <level.cp> [--slice NODES] [--max-load L] [--max-gpu PERCENT] [--poll-ms MS] [--max-slices N] [--checkpoint FILE]
 #   the level is the file's base name: scout, party or saga (the enumeration `level` of the domain).
 # Free means the one-minute load average is under --max-load (default 4, the host has 8 threads) and the GPU is under --max-gpu percent busy (default 30).
-{opts, [cp_path], _} = OptionParser.parse(System.argv(), strict: [slice: :integer, max_load: :float, max_gpu: :integer, poll_ms: :integer, max_slices: :integer, checkpoint: :string])
-slice = Keyword.get(opts, :slice, 100)
+{opts, [cp_path], _} = OptionParser.parse(System.argv(), strict: [slice: :integer, max_load: :float, max_gpu: :integer, poll_ms: :integer, max_slices: :integer, checkpoint: :string, engine: :string, blocks: :integer, power: :integer, gpu_slice: :integer, duty: :float, save_every: :integer])
+engine = Keyword.get(opts, :engine, "cpu")
+gpu? = engine == "gpu"
+slice = Keyword.get(opts, :slice, if(gpu?, do: 10, else: 100))
 max_load = Keyword.get(opts, :max_load, 4.0)
 max_gpu = Keyword.get(opts, :max_gpu, 30)
 poll_ms = Keyword.get(opts, :poll_ms, 2000)
@@ -14,10 +19,17 @@ root = File.cwd!()
 level = Path.basename(cp_path, ".cp")
 level_value = %{"scout" => 1, "party" => 2, "saga" => 3} |> Map.fetch!(level)
 store_bin = Path.join(root, ".lake/build/bin/frontier_store")
-[scratch] = case System.cmd("elixir", [Path.join(root, "tools/turbo_solve.exs"), cp_path, "--prepare"], env: [{"ELIXIR_ERL_OPTIONS", "+fnu"}]) do
-  {out, 0} -> out |> String.split("\n", trim: true) |> Enum.take(-1)
-  {out, code} -> raise("prepare failed (#{code}): #{String.slice(out, 0, 400)}")
-end
+{scratch, gpu_files} =
+  if gpu? do
+    {out, 0} = System.cmd("elixir", [Path.join(root, "tools/turbo_gpu.exs"), cp_path, "--prepare", "--blocks", Integer.to_string(Keyword.get(opts, :blocks, 256)), "--power", Integer.to_string(Keyword.get(opts, :power, 13))], env: [{"ELIXIR_ERL_OPTIONS", "+fnu"}])
+    [cubin, host, dir] = out |> String.split("\n", trim: true) |> Enum.take(-3)
+    {dir, {cubin, host, Path.join(dir, "input.txt")}}
+  else
+    case System.cmd("elixir", [Path.join(root, "tools/turbo_solve.exs"), cp_path, "--prepare"], env: [{"ELIXIR_ERL_OPTIONS", "+fnu"}]) do
+      {out, 0} -> {out |> String.split("\n", trim: true) |> List.last(), nil}
+      {out, code} -> raise("prepare failed (#{code}): #{String.slice(out, 0, 400)}")
+    end
+  end
 checkpoint = Keyword.get(opts, :checkpoint, Path.join(scratch, "checkpoint.bin"))
 status_file = checkpoint <> ".status"
 domain = Path.join(root, "entities/domains/turbo-solve.jsonld")
@@ -35,7 +47,17 @@ gpu_percent = fn ->
     end
   end
 end
-free? = fn -> load1.() < max_load and gpu_percent.() < max_gpu end
+{:ok, own} = Agent.start_link(fn -> %{burst_ms: 0, checked_at: System.monotonic_time(:millisecond)} end)
+# The GPU reading includes this process's own launches: subtract its share of the time since the last reading.
+others_gpu = fn ->
+  reading = gpu_percent.()
+  now = System.monotonic_time(:millisecond)
+  Agent.get_and_update(own, fn %{burst_ms: burst, checked_at: at} = st ->
+    share = min(100, round(burst * 100 / max(now - at, 1000)))
+    {max(reading - share, 0), %{st | burst_ms: 0, checked_at: now}}
+  end)
+end
+free? = fn -> if gpu?, do: others_gpu.() < max_gpu, else: load1.() < max_load and gpu_percent.() < max_gpu end
 done? = fn -> File.read(status_file) == {:ok, "done"} end
 
 # One planner call: a problem with the observed state in a fresh database, planned from the tables.
@@ -62,7 +84,7 @@ plan = fn free, done ->
   Enum.map(doc["steps"], fn s -> s["action"] end)
 end
 
-run_slice = fn ->
+run_cpu_slice = fn ->
   {out, code} = System.cmd("nice", ["-n", "19", Path.join(scratch, "solve"), Path.join(scratch, "input.txt"), checkpoint, Integer.to_string(slice)])
   if code != 0, do: raise("slice failed (#{code})")
   [status | rest] = String.split(out, "\n", trim: true)
@@ -73,13 +95,65 @@ run_slice = fn ->
   status
 end
 
+# The resident GPU host: one process for the whole run, spoken to in lines.
+{:ok, gpu_state} = Agent.start_link(fn -> %{port: nil, slices: 0} end)
+gpu_line = fn port ->
+  receive do
+    {^port, {:data, {:eol, line}}} -> line
+    {^port, {:exit_status, code}} -> raise("the GPU host exited with #{code}")
+  after 120_000 -> raise("the GPU host did not answer in 120 s")
+  end
+end
+gpu_reply = fn port, command ->
+  Port.command(port, command <> "\n")
+  Stream.repeatedly(fn -> gpu_line.(port) end)
+  |> Enum.reduce_while([], fn line, seen ->
+    cond do
+      String.starts_with?(line, "best bound") -> IO.puts("  " <> line); {:cont, seen}
+      String.starts_with?(line, "status") or line in ["saved", "loaded", "save failed", "load failed"] -> {:halt, Enum.reverse([line | seen])}
+      true -> {:cont, [line | seen]}
+    end
+  end)
+end
+gpu_port = fn ->
+  case Agent.get(gpu_state, & &1.port) do
+    nil ->
+      {cubin, host, input} = gpu_files
+      env = [{~c"TURBO_SERVE", ~c"1"}, {~c"TURBO_GPU_DUTY", ~c"#{Keyword.get(opts, :duty, 25.0)}"}]
+      port = Port.open({:spawn_executable, host}, [:binary, :exit_status, :stderr_to_stdout, {:line, 4096}, {:env, env},
+        {:args, [cubin, input, Integer.to_string(Keyword.get(opts, :blocks, 256)), Integer.to_string(Keyword.get(opts, :gpu_slice, 1))]}])
+      if File.exists?(checkpoint) and not done?.(), do: IO.puts("  " <> Enum.join(gpu_reply.(port, "load " <> checkpoint), " / "))
+      Agent.update(gpu_state, &%{&1 | port: port})
+      port
+    port -> port
+  end
+end
+run_gpu_slice = fn ->
+  port = gpu_port.()
+  t0 = System.monotonic_time(:millisecond)
+  [status] = Enum.filter(gpu_reply.(port, "run #{slice}"), &String.starts_with?(&1, "status"))
+  Agent.update(own, fn st -> %{st | burst_ms: st.burst_ms + System.monotonic_time(:millisecond) - t0} end)
+  n = Agent.get_and_update(gpu_state, fn st -> {st.slices + 1, %{st | slices: st.slices + 1}} end)
+  if rem(n, Keyword.get(opts, :save_every, 50)) == 0, do: gpu_reply.(port, "save " <> checkpoint)
+  if String.starts_with?(status, "status done") do
+    Port.command(port, "result\n")
+    File.write!(status_file, "done")
+    rest = Stream.repeatedly(fn -> receive do {^port, {:data, {:eol, l}}} -> l; {^port, {:exit_status, _}} -> :eof after 60_000 -> :eof end end) |> Enum.take_while(&(&1 != :eof))
+    File.write!(Path.join(scratch, "result.txt"), Enum.join(rest, "\n") <> "\n")
+  end
+  status
+end
+run_slice = if gpu?, do: run_gpu_slice, else: run_cpu_slice
+
 loop = fn loop, slices ->
   steps = plan.(free?.(), done?.())
   cond do
     steps == [] ->
       IO.puts("done after #{slices} slice(s); result in #{Path.join(scratch, "result.txt")}")
       IO.puts(File.read!(Path.join(scratch, "result.txt")) |> String.split("\n") |> Enum.take(4) |> Enum.join("\n"))
-    max_slices != :infinity and slices >= max_slices -> IO.puts("paused after #{slices} slice(s); checkpoint #{checkpoint}")
+    max_slices != :infinity and slices >= max_slices ->
+      if gpu? and Agent.get(gpu_state, & &1.port) != nil, do: IO.puts("  " <> Enum.join(gpu_reply.(Agent.get(gpu_state, & &1.port), "save " <> checkpoint), " / "))
+      IO.puts("paused after #{slices} slice(s); checkpoint #{checkpoint}")
     hd(steps) == "wait-free" ->
       IO.puts("waiting: load #{load1.()} (limit #{max_load}), gpu #{gpu_percent.()}% (limit #{max_gpu}%)")
       Process.sleep(poll_ms)

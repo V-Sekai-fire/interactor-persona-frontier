@@ -1,5 +1,10 @@
 // Runs the cooperative Slang solver (turbo/Turbo/Coop.lean, compiled to a cubin) on the GPU in short bounded launches.
 // Usage: turbo_gpu KERNEL.cubin INPUT.txt BLOCKS SLICE_NODES [PAUSE_MS]
+// TURBO_SERVE=1 keeps the process resident and reads commands on standard input, one per line, answering one line each:
+//   run N      do at most N launches (fewer when the search is done); reply "status running|done nodes X approx A launches L"
+//   status     the same reply without launching
+//   save PATH  write the search state (stores, snapshots, best stores, decisions, state, control) to a file;  load PATH  read it back
+//   result     print the final report (as the one-shot mode does) and exit;  quit  exit
 // TURBO_GPU_DUTY (percent, default 100) caps this process's share of the GPU: after a launch that took d ms the host sleeps d * (100 / duty - 1) ms, so a game rendering at 64 Hz gets the card in between.
 // INPUT.txt is the problem text of tools/turbo_solve.exs (header of ten integers, the store, the bytecodes, the strategies). Each launch advances every block by at most
 // SLICE_NODES nodes, so one launch is short; the host sleeps PAUSE_MS between launches. Output is the format of the CPU driver, plus launch statistics.
@@ -8,6 +13,7 @@
 #include <climits>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <thread>
 #include <algorithm>
 #include <vector>
@@ -66,39 +72,74 @@ int main(int argc, char** argv) {
     CHECK(cuMemcpyHtoD(gp, &g, gsize));
 
     using clk = std::chrono::steady_clock;
+    const double duty = getenv("TURBO_GPU_DUTY") ? atof(getenv("TURBO_GPU_DUTY")) : 100.0;
     auto start = clk::now();
     int launches = 0;
     double max_ms = 0, sum_ms = 0;
-    const double duty = getenv("TURBO_GPU_DUTY") ? atof(getenv("TURBO_GPU_DUTY")) : 100.0;
-    bool done = false;
+        bool done = false;
     int last_approx = INT_MAX;
-    const int max_launches = getenv("TURBO_MAX_LAUNCHES") ? atoi(getenv("TURBO_MAX_LAUNCHES")) : INT_MAX;
-    while (!done && launches < max_launches) {
-        auto t0 = clk::now();
-        CHECK(cuLaunchKernel(fn, blocks, 1, 1, 256, 1, 1, 0, 0, nullptr, nullptr));
-        CHECK(cuCtxSynchronize());
-        double ms = std::chrono::duration<double, std::milli>(clk::now() - t0).count();
-        launches++; sum_ms += ms; if (ms > max_ms) max_ms = ms;
-        CHECK(cuMemcpyDtoH(state.data(), d_state, state.size() * sizeof(int)));
-        done = true;
-        int finished = 0;
-        long total_nodes = 0;
-        for (int b = 0; b < blocks; ++b) { if (state[b * STATE + 16] != 5) done = false; else finished++; total_nodes += state[b * STATE + 7]; }
-        {
+    auto step = [&](int max_this_call) -> int {
+        int did = 0;
+        while (!done && did < max_this_call) {
+            auto t0 = clk::now();
+            if (cuLaunchKernel(fn, blocks, 1, 1, 256, 1, 1, 0, 0, nullptr, nullptr) != CUDA_SUCCESS || cuCtxSynchronize() != CUDA_SUCCESS) { fprintf(stderr, "launch failed\n"); return -1; }
+            double ms = std::chrono::duration<double, std::milli>(clk::now() - t0).count();
+            launches++; did++; sum_ms += ms; if (ms > max_ms) max_ms = ms;
+            cuMemcpyDtoH(state.data(), d_state, state.size() * sizeof(int));
+            done = true;
+            int finished = 0;
+            long total_nodes = 0;
+            for (int b = 0; b < blocks; ++b) { if (state[b * STATE + 16] != 5) done = false; else finished++; total_nodes += state[b * STATE + 7]; }
             int approx = 0;
             cuMemcpyDtoH(&approx, d_ctl + 11 * sizeof(int), sizeof(int));
             if (approx != last_approx) {
                 last_approx = approx;
-                printf("best bound %d at %.1f ms (launch %d, %ld nodes)\n", approx, std::chrono::duration<double, std::milli>(clk::now() - start).count(), launches, total_nodes);
-                fflush(stdout);
+                fprintf(stderr, "best bound %d at %.1f ms (launch %d, %ld nodes)\n", approx, std::chrono::duration<double, std::milli>(clk::now() - start).count(), launches, total_nodes);
             }
+            if (getenv("TURBO_PROGRESS") && launches % atoi(getenv("TURBO_PROGRESS")) == 0)
+                fprintf(stderr, "launch %d: %ld nodes, %d of %d blocks done, best bound %d\n", launches, total_nodes, finished, blocks, approx);
+            if (!done && pause_ms) std::this_thread::sleep_for(std::chrono::milliseconds(pause_ms));
+            if (!done && duty < 100.0) std::this_thread::sleep_for(std::chrono::duration<double, std::milli>(ms * (100.0 / duty - 1.0)));
         }
-        if (getenv("TURBO_PROGRESS") && launches % atoi(getenv("TURBO_PROGRESS")) == 0) {
-            cuMemcpyDtoH(control.data(), d_ctl, control.size() * sizeof(int));
-            fprintf(stderr, "launch %d: %ld nodes, %d of %d blocks done, next subproblem %d, best bound %d\n", launches, total_nodes, finished, blocks, control[10], control[11]);
+        return did;
+    };
+    auto status_line = [&]() {
+        long nodes = 0;
+        for (int b = 0; b < blocks; ++b) nodes += state[b * STATE + 7];
+        printf("status %s nodes %ld approx %d launches %d\n", done ? "done" : "running", nodes, last_approx, launches);
+        fflush(stdout);
+    };
+    auto save_all = [&](const char* path, bool writing) -> bool {
+        FILE* f = fopen(path, writing ? "wb" : "rb");
+        if (!f) return false;
+        std::vector<int> tmp;
+        bool ok = true;
+        auto copy = [&](CUdeviceptr d, size_t ints) {
+            tmp.resize(ints);
+            if (writing) { cuMemcpyDtoH(tmp.data(), d, ints * sizeof(int)); ok = ok && fwrite(tmp.data(), sizeof(int), ints, f) == ints; }
+            else { ok = ok && fread(tmp.data(), sizeof(int), ints, f) == ints; if (ok) cuMemcpyHtoD(d, tmp.data(), ints * sizeof(int)); }
+        };
+        copy(d_lower, cells); copy(d_upper, cells); copy(d_sl, cells); copy(d_su, cells); copy(d_bl, cells); copy(d_bu, cells);
+        copy(d_dec, decisions.size()); copy(d_state, state.size()); copy(d_ctl, control.size());
+        fclose(f);
+        if (!writing) { cuMemcpyDtoH(state.data(), d_state, state.size() * sizeof(int)); }
+        return ok;
+    };
+    if (getenv("TURBO_SERVE")) {
+        char line[512];
+        while (fgets(line, sizeof line, stdin)) {
+            int count = 0; char path[400];
+            if (sscanf(line, "run %d", &count) == 1) { if (step(count) < 0) return 2; status_line(); }
+            else if (!strncmp(line, "status", 6)) status_line();
+            else if (sscanf(line, "save %399s", path) == 1) { printf(save_all(path, true) ? "saved\n" : "save failed\n"); fflush(stdout); }
+            else if (sscanf(line, "load %399s", path) == 1) { printf(save_all(path, false) ? "loaded\n" : "load failed\n"); fflush(stdout); status_line(); }
+            else if (!strncmp(line, "result", 6)) break;
+            else if (!strncmp(line, "quit", 4)) return 0;
         }
-        if (!done && pause_ms) std::this_thread::sleep_for(std::chrono::milliseconds(pause_ms));
-        if (!done && duty < 100.0) std::this_thread::sleep_for(std::chrono::duration<double, std::milli>(ms * (100.0 / duty - 1.0)));
+    }
+    else {
+        const int max_launches = getenv("TURBO_MAX_LAUNCHES") ? atoi(getenv("TURBO_MAX_LAUNCHES")) : INT_MAX;
+        if (step(max_launches) < 0) return 2;
     }
     double wall = std::chrono::duration<double, std::milli>(clk::now() - start).count();
     CHECK(cuMemcpyDtoH(control.data(), d_ctl, control.size() * sizeof(int)));
