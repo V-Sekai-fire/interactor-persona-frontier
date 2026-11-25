@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
 # SPDX-License-Identifier: Apache-2.0 OR MIT
-{ lib, stdenv, fetchgit, fetchurl, leanToolchain, git, cacert, autoPatchelfHook }:
+{ lib, stdenv, version, fetchgit, fetchurl, leanToolchain, git, cacert, autoPatchelfHook }:
 
 # Lake resolves its dependencies from git and checks each checkout's revision, so every dependency is
 # fetched with its .git kept, at the revision in the planner's lake-manifest.json, and placed in
@@ -35,7 +35,7 @@ let
 in
 stdenv.mkDerivation {
   pname = "frontier";
-  version = "0";
+  inherit version;
 
   # the flake is part of the repository, so the planner is built from the checkout the flake came from
   src = lib.cleanSource ../.;
