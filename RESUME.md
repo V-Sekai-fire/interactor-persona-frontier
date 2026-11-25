@@ -1,10 +1,13 @@
-# RESUME (interactor-persona-frontier, 2026-11-24 evening)
+# RESUME (interactor-persona-frontier, parked 2026-11-25)
 
 The Party Saga planner (RECTGTN in SQLite, `docs/party-saga.md`, `docs/solver-spec.md`, `AGENTS.md` for the rules) and, since this week, a port of Turbo's constraint solver to Slang. The running log with every number and every correction is `docs/turbo-slang.md`; read its sections from the newest.
 
 ## State
-- `main` has the whole solver (PR #13). Open: #14 `dev/cluster-byzantine` (cluster answers accepted on equal replicas; checks green; side work, the owner decides), #15 `dev/solver-blocks` (many-block checks, one handoff rule, 64 blocks by default, planner call per slice).
-- Nothing of this is deployed; the GPU runs happen on this machine when the card is free.
+- `main` has everything: the solver (PR #13), the Byzantine cluster (#14), many blocks and one handoff rule (#15), the launch as a time budget (#17) and the launch derived from the 64 Hz frame and the duty (#18). No branch of this work is open. Nothing is deployed; the GPU runs happen on a machine with an NVIDIA card when it is free.
+- **Parked on 2026-11-25.** The shared mission is now the fabric beta (RFD66606-2490, 2360, 2436): two people in one campus zone see each other's avatars. The solver port is not a step of its attack, so it waits, and none of it is abandoned. Resume it when the owner says so, or when the beta needs it: the nearest link is RFD66606-2436's frontier-learning runs (levels with planted defects, regret over the last eight runs), which this repository's frontier loop could schedule.
+
+## On another computer
+Machine-specific, not in git: an NVIDIA GPU and `nvcc` (this desk used `/mnt/fire/6-datasource/turbo-build/cuda/.pixi`), the Slang SDK (`tools/slang_vendor.exs` fetches it into `.slang/`), a MiniZinc 2.11 bundle (`MINIZINC_HOME`), Lean 4 through elan, Elixir, and the level files `/mnt/fire/6-datasource/turbo-runs/{scout,party,saga}.cp`, which you regenerate with `MiniZinc` to `.fzn` and then `frontier_frontend --dump LEVEL.fzn`. FoundationDB is only needed for the NixOS test (`nix flake check -L`). The shell on this desk is dash: scripts that use `pipefail` run with bash.
 
 ## What runs, and the numbers (equal to Turbo's counts on one block)
 | level | Turbo | one GPU block | 64 blocks |
