@@ -44,7 +44,10 @@ jobs:
           node w2 172.28.0.12 $worker
           node w3 172.28.0.13 $worker --die-at-first-job
           node w4 172.28.0.14 $worker --lie
-          echo "code=$(timeout 300 docker wait coord)" >> "$GITHUB_OUTPUT"
+          timeout 300 docker wait coord > /dev/null
+          code=$(docker inspect -f '{{.State.ExitCode}}' coord)
+          test -n "$code" || { echo "the coordinator's exit code is empty"; exit 1; }
+          echo "code=$code" >> "$GITHUB_OUTPUT"
           docker logs coord > coord.log 2>&1
           cat coord.log
       - name: Judge
