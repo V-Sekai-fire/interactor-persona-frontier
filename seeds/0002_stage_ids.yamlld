@@ -1,5 +1,7 @@
 # A stage is named by its own pointer segment instead of a number: /stage/<subject>-<id> in the plan state.
 # The old number stays as an alias, so a goal such as reach-character-10 still answers.
+"@context":
+  "@vocab": https://v-sekai.org/planning/
 stages:
   "1": null
   "2": null

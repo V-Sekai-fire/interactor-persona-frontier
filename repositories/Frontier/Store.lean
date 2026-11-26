@@ -102,7 +102,7 @@ def optional (table column idColumn id : String) : IO (List (String × Json)) :=
   | none => pure []
 
 def header (name : String) : List (String × Json) :=
-  [("@context", Json.mkObj [("VSEKAI", "https://v-sekai.org/"), ("domain", "VSEKAI:planning/domain/")]), ("name", Json.str name)]
+  [("@context", Json.mkObj [("@vocab", "https://v-sekai.org/planning/"), ("VSEKAI", "https://v-sekai.org/"), ("domain", "VSEKAI:planning/domain/")]), ("name", Json.str name)]
 
 def domainVariablesJson (d : String) : IO (List (String × Json)) := do
   let vs ← sql s!"SELECT v.name AS name, v.type AS type, COALESCE(x.description, '') AS description FROM domain_variable v LEFT JOIN domain_variable_description x ON x.domain_id = v.domain_id AND x.variable = v.name WHERE v.domain_id = {keyOf d} ORDER BY v.name;"
