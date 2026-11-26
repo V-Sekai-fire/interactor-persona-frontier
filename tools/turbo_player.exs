@@ -109,7 +109,7 @@ plan = fn free, done ->
   tick = Agent.get_and_update(ticks, fn n -> {n, n + 1} end)
   name = "turbo_solve_#{level}_tick_#{tick}"
   problem = %{
-    "@context" => %{"VSEKAI" => "https://v-sekai.org/", "domain" => "VSEKAI:planning/domain/"}, "@type" => "domain:Problem",
+    "@context" => %{"@vocab" => "https://v-sekai.org/planning/", "VSEKAI" => "https://v-sekai.org/", "domain" => "VSEKAI:planning/domain/"}, "@type" => "domain:Problem",
     "capabilities" => %{"entities" => %{}, "graph" => %{"edges" => []}}, "domain" => "turbo_solve", "name" => name,
     "source" => "interactor-persona-frontier", "todo_list" => [["solve-level", "machine.host", "level.#{level}"]],
     "variables" => [%{"init" => %{"1" => if(free, do: 1, else: 0)}, "name" => "free", "type" => "int"},

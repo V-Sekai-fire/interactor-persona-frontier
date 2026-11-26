@@ -77,8 +77,8 @@ def seedFiles : IO (List (String × String)) := do
     let text ← IO.FS.readFile (System.FilePath.mk "seeds" / n)
     return (n, text)
 
-/-- Apply each seed file once, in order. A file already applied must still match what was applied: a change
-goes in a new seed, so an edit to an old one is refused, as a migration's checksum would be. -/
+/-- Apply each seed file in order. A seed file may be edited: an applied seed whose file changed is applied again
+with the new body. -/
 def applySeeds : IO Unit := do
   let _ ← sql "CREATE TABLE IF NOT EXISTS seeds (name TEXT PRIMARY KEY, body TEXT NOT NULL, applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')));"
   for (name, text) in ← seedFiles do
@@ -89,7 +89,7 @@ def applySeeds : IO Unit := do
     match rows[0]? >>= fun r => (r.getObjVal? "body").toOption >>= (·.getStr?.toOption) with
     | none => let _ ← sql s!"INSERT INTO seeds (name, body) VALUES ({quote name}, {quote body});"
     | some old =>
-      if old != body then throw (IO.userError s!"seed {name} was edited after it was applied; add a new seed instead")
+      if old != body then discard <| sql s!"UPDATE seeds SET body = {quote body}, applied_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE name = {quote name};"
 
 /-- The knowledge: the applied seeds in order, with the learned rows over them. -/
 def knowledge : IO Json := do

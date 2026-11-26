@@ -47,7 +47,7 @@ namespace Gen
 def ge (ptr : String) : Json :=
   Json.mkObj [("eval", Json.mkObj [("type", "math/ge"), ("a", Json.mkObj [("type", "pointer/get"), ("pointer", ptr)]), ("b", 1)])]
 def set (ptr : String) : Json := Json.mkObj [("pointer/set", ptr), ("value", 1)]
-def ctx : Json := Json.mkObj [("VSEKAI", "https://v-sekai.org/"), ("domain", "VSEKAI:planning/domain/")]
+def ctx : Json := Json.mkObj [("@vocab", "https://v-sekai.org/planning/"), ("VSEKAI", "https://v-sekai.org/"), ("domain", "VSEKAI:planning/domain/")]
 
 def domain (k : Knowledge) : Json :=
   let subs := subjects k

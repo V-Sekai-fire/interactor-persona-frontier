@@ -17,8 +17,12 @@ def dropN (s : String) (n : Nat) : String := (s.toSubstring.drop n).toString
 def planText (k : Knowledge) (problem : Json) : String :=
   Persona.Jsonld.planOf (Gen.domain k).compress problem.compress
 
+/-- The plan, under the frontier's own context: the planner's context has no `@vocab`, so its plain keys would
+expand to nothing. -/
 def planJson (k : Knowledge) (problem : Json) : Json :=
-  (Json.parse (planText k problem)).toOption.getD (Json.mkObj [("refused", "bad_plan")])
+  match Json.parse (planText k problem) with
+  | .ok plan => if (plan.getObjVal? "@context").isOk then plan.setObjVal! "@context" Gen.ctx else plan
+  | .error _ => Json.mkObj [("refused", "bad_plan")]
 
 def settled (plan : Json) : List String :=
   (strsOf (field plan "steps")).filter (·.startsWith "settle-")

@@ -1,5 +1,6 @@
 {
  "@context": {
+  "@vocab": "https://v-sekai.org/planning/",
   "VSEKAI": "https://v-sekai.org/",
   "domain": "VSEKAI:planning/domain/"
  },

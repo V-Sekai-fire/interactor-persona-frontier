@@ -1,18 +1,19 @@
 -- SPDX-FileCopyrightText: 2026 K. S. Ernest (iFire) Lee
 -- SPDX-License-Identifier: Apache-2.0 OR MIT
 import Frontier.Import
+import YamlLd
 /-! The stored planner documents: `frontier_store migrate | domain NAME | problem NAME | plan PROBLEM | import FILE... | fixtures ROOT`. -/
 open Lean Frontier
 
 def readJson (path : String) : IO Json := do
-  match Json.parse (← IO.FS.readFile path) with
+  match YamlLd.parse (← IO.FS.readFile path) with
   | .ok j => pure j
   | .error e => throw (IO.userError s!"{path}: {e}")
 
 def jsonldIn (dir : String) : IO (List String) := do
   if !(← System.FilePath.isDir dir) then return []
   let es ← System.FilePath.readDir dir
-  let names := es.toList.map (·.path.toString) |>.filter (·.endsWith ".jsonld")
+  let names := es.toList.map (·.path.toString) |>.filter fun n => n.endsWith ".yamlld" || n.endsWith ".jsonld"
   pure (names.toArray.qsort (· < ·)).toList
 
 def normalized (text : String) : String := ((Json.parse text).toOption.map (·.compress)).getD text
@@ -60,10 +61,10 @@ def fixtures (root : String) : IO UInt32 := do
       else throw e
   let mut failures := 0
   let mut checks := 0
-  let domainTexts ← domainFiles.mapM fun f => do pure (Import.str (← readJson f) "name", ← IO.FS.readFile f)
+  let domainTexts ← domainFiles.mapM fun f => do let d ← readJson f; pure (Import.str d "name", d.compress)
   for f in problemFiles do
-    let text ← IO.FS.readFile f
     let doc ← readJson f
+    let text := doc.compress
     let some (_, dtext) := domainTexts.find? (·.1 == Import.str doc "domain") | IO.eprintln s!"FAIL {f}: no domain file"; failures := failures + 1; continue
     let want := normalized (Persona.Jsonld.planOf dtext text)
     let got := normalized (← Store.plan (Import.str doc "name"))
@@ -76,8 +77,9 @@ def fixtures (root : String) : IO UInt32 := do
     checks := checks + 1
     if want == got then IO.println s!"  ok   plan document of {Import.str doc "problem"} round trips"
     else IO.println s!"  FAIL plan document of {Import.str doc "problem"}\n    file:   {clip want}\n    tables: {clip got}"; failures := failures + 1
-  IO.println (if failures == 0 then s!"OK: {checks} checks" else s!"FAILED: {failures} of {checks}")
-  pure (if failures == 0 then 0 else 1)
+  -- a run that found no fixture checked nothing, so it is a failure
+  IO.println (if checks == 0 then s!"FAILED: no fixtures under {root}" else if failures == 0 then s!"OK: {checks} checks" else s!"FAILED: {failures} of {checks}")
+  pure (if failures == 0 && checks != 0 then 0 else 1)
 
 def main (args : List String) : IO UInt32 := do
   Db.init

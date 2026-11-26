@@ -4,8 +4,8 @@ import Lean.Data.Json
 import YamlLd
 /-!
 # Seeds, as in a database migration.
-The authored data is a folder of numbered YAML-LD seed files (`seeds/0001_pipeline.yamlld`, ...), applied in name order,
-each once, and never edited after it has been applied: a change is a new seed that overrides the earlier ones.
+The authored data is a folder of numbered YAML-LD seed files (`seeds/0001_pipeline.yamlld`, ...), applied in name order;
+a later seed overrides the earlier ones, and an edited seed replaces what was applied from it.
 What the planner learns (revisions, durations, learned requirements) is not a seed; it lives in the store only.
 Both steps here are pure: `fold` merges the seeds in order and `withLearned` puts the learned rows over the result,
 so the Elixir caller and the store assemble the same knowledge from the same code.

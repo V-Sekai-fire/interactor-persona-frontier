@@ -1,3 +1,5 @@
+"@context":
+  "@vocab": https://v-sekai.org/planning/
 stages:
   "1":
     name: look-dev
