@@ -8,7 +8,7 @@ The things it makes are `character`, `prop` and `world`; a goal is one of those 
 
 ## How it learns
 
-The plan comes from a planning domain of the pipeline, not from a language model, so it is the same every time and it is checkable. Report what a real stage run did and the domain learns from it, a requirement it was missing or a duration it had wrong, each landing only through a gate with a positive and a negative control. The authored data is the numbered YAML-LD seed files in `seeds/` (applied once each, like database migrations; a change is a new seed), and what it learns is kept in the store only.
+The plan comes from a planning domain of the pipeline, not from a language model, so it is the same every time and it is checkable. Report what a real stage run did and the domain learns from it, a requirement it was missing or a duration it had wrong, each landing only through a gate with a positive and a negative control. The authored data is the numbered YAML-LD seed files in `seeds/` (applied in name order, later over earlier; an edited seed replaces what was applied from it), and what it learns is kept in the store only.
 
 ## The repository
 
