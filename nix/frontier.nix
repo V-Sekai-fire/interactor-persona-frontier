@@ -15,7 +15,7 @@ let
     (dep "lean-yaml-ld" "https://github.com/V-Sekai-fire/lean-yaml-ld"
       "8a7d1c5a83c1935fa9751bb5e9a55585557136e1" "sha256-u3OXPI6XgBd4WK8B3n7wz51l2nUcrkUq4hvTZXEA/64=")
     (dep "persona" "https://github.com/V-Sekai-fire/interactor-taskweft-persona"
-      "6f63c7e3c05133d0d0a4a3ad6a3e4d277a69b7bb" "sha256-muSvTJMMUtnbYLGjk8+6ynikCWABYCOEqFT0XxfgFdo=")
+      "6f63c7e3c05133d0d0a4a3ad6a3e4d277a69b7bb" "sha256-f9UxrAF/T5hegP6raRZBIN5ip/GN/5+tee8LXyIq2kY=")
     (dep "plausible-witness-dag" "https://github.com/V-Sekai-fire/plausible-witness-dag"
       "f18818941e8914b110f85ec330889a4785c01bf1" "sha256-zzugPH1RI46tfxGWjP3JOZ8dD5wog9A7gtN8V/SvZ8M=")
     (dep "plausible" "https://github.com/leanprover-community/plausible"
